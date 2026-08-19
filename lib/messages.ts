@@ -1,69 +1,69 @@
-import type { GardenState } from "./types";
+import type { GardenState, TendResult } from "./types";
+import { SPECIES_BY_KEY } from "./species";
 
 const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
 
-const welcomeNew = [
-  "A tiny seed settles into the pond. Water it every day and watch it grow!",
-  "Welcome to your pond! Your lily seed is ready for its very first drink.",
-];
-
-const welcomeBack = [
-  "You came back! Your lily has been waiting for you. 💚",
-  "Welcome back, gardener. The pond missed your footsteps.",
-  "A new day, a new drop of care. Your lily perks up as you arrive.",
-];
-
-const welcomeWatered = [
-  "All watered for today — your lily is happily soaking it in. See you tomorrow!",
-  "Nothing left to do but enjoy the pond. Come back tomorrow for the next drink!",
-];
-
-const welcomeWilted = [
-  "Oh no — your lily drooped a little while you were away. A drink will cheer it right up!",
-  "Your lily missed you! It's a bit wilty, but one watering will fix everything.",
-];
-
-const afterWater = [
-  "Glug glug… ahh! Your lily wiggles happily. See you tomorrow! 🌙",
-  "That hit the spot! The lily stands a little taller now.",
-  "Fresh water, happy roots. Come back tomorrow for more growing!",
-  "The lily sways a thank-you. Same time tomorrow?",
-];
-
-const afterGrow = [
-  "It grew! A whole new stage — your daily care is working. ✨",
-  "Sparkles! Your lily just reached a new stage of growth!",
-  "Look at that — one more step on the journey to full bloom!",
-];
-
-const afterRecover = [
-  "Phew! The lily perks back up. Growth continues — try not to skip days!",
-  "Back from the brink! Your lily forgives you completely. 💧",
-];
-
-const already = [
-  "Already watered today! Lilies grow on patience — come back tomorrow. 🌙",
-  "One drink a day is plenty. Your lily is savoring it!",
-  "The pond is full of today's love already. See you tomorrow!",
-];
-
-const bloom = [
-  "🌸 FULL BLOOM! Your lily opens its petals to the sky. You did this, one day at a time!",
-  "🌸 It bloomed!! Every single day of care is in these petals. Beautiful work, gardener.",
-];
+const hour12 = (h: number | null | undefined) =>
+  h === null || h === undefined ? "" : `${String(h).padStart(2, "0")}:00`;
 
 export function welcomeMessage(s: GardenState): string {
-  if (s.isBloomed) return "Your lily is in full bloom! Admire it — or plant a new seed. 🌸";
-  if (s.wilted) return pick(welcomeWilted);
-  if (s.wateredToday) return pick(welcomeWatered);
-  if (s.dayNumber <= 1 && s.waters === 0) return pick(welcomeNew);
-  return pick(welcomeBack);
+  const planted = s.plots.filter((p) => p.plant).length;
+  const thirsty = s.plots.filter((p) => p.plant?.thirsty && !p.plant?.isBloomed && !p.plant?.dead).length;
+  const dead = s.plots.filter((p) => p.plant?.dead).length;
+  const bloomed = s.plots.filter((p) => p.plant?.isBloomed).length;
+
+  if (planted === 0)
+    return "Empty plots, endless promise. Tap a plot to plant your first seed! 🌱";
+  if (dead > 0)
+    return `${dead === 1 ? "One plant didn't make it" : `${dead} plants didn't make it`} while you were away. Clear the plot and start again. 🥀`;
+  if (thirsty > 0)
+    return `${thirsty} ${thirsty === 1 ? "plant needs" : "plants need"} you today. Let's get watering! 💧`;
+  if (bloomed > 0)
+    return `${bloomed} ${bloomed === 1 ? "bloom is" : "blooms are"} ready to harvest. Beautiful work! 🌸`;
+  return pick([
+    "Everything is watered and happy. See you tomorrow! 🌙",
+    "Your garden is thriving. Nothing left to do today.",
+    "All tended. The garden hums along without you now.",
+  ]);
 }
 
-export function waterMessage(status: string, grew?: boolean, bloomedNow?: boolean, wasWilted?: boolean): string {
-  if (bloomedNow) return pick(bloom);
-  if (status === "already") return pick(already);
-  if (wasWilted) return pick(afterRecover);
-  if (grew) return Math.random() < 0.5 ? pick(afterGrow) : pick(afterWater);
-  return pick(afterWater);
+export function tendMessage(r: TendResult): string {
+  const sp = r.species ? SPECIES_BY_KEY[r.species] : undefined;
+  const name = sp?.name ?? "It";
+
+  switch (r.status) {
+    case "watered":
+      if (r.bloomedNow)
+        return `🌸 ${name} reached full bloom! +${r.dewEarned} dewdrops. Harvest it to free the plot.`;
+      if (r.wasWilted) return `${name} perks back up. Try not to leave it so long! +${r.dewEarned} 💧`;
+      if (r.grew) return pick([
+        `${name} grew a stage! +${r.dewEarned} dewdrops ✨`,
+        `Fresh water, new growth. +${r.dewEarned} dewdrops`,
+      ]);
+      return `Watered. +${r.dewEarned} dewdrops`;
+    case "fed":
+      return `${name} has been fed. +${r.dewEarned} dewdrops 🌰`;
+    case "pruned":
+      return `${name} is looking sharp. +${r.dewEarned} dewdrops ✂️`;
+    case "already":
+      return r.reason ?? "Already tended today. Come back tomorrow! 🌙";
+    case "not_thirsty":
+      return sp
+        ? `${name} drinks every ${sp.cadenceDays} days — it isn't thirsty yet.`
+        : "Not thirsty yet.";
+    case "wrong_window":
+      return sp?.windowStart === 18
+        ? `${name} only drinks after dusk. Come back between ${hour12(r.windowStart)} and ${hour12(r.windowEnd)}. 🌙`
+        : `${name} only drinks between ${hour12(r.windowStart)} and ${hour12(r.windowEnd)}. ☀️`;
+    case "overwatered":
+      return `💀 Too much! ${name} likes dry roots — you've damaged it. Wait for it to be thirsty next time.`;
+    case "not_needed":
+      return r.reason ?? "Nothing to do there.";
+    case "bloomed":
+      return `${name} is already in full bloom. Harvest it!`;
+    case "dead":
+      return `${name} is gone. Clear the plot to plant again.`;
+    default:
+      return "Hmm, that didn't work. Try again!";
+  }
 }

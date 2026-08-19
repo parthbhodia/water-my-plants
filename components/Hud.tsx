@@ -1,6 +1,5 @@
 "use client";
 
-import { STAGES, FINAL_STAGE } from "@/lib/stages";
 import type { GardenState } from "@/lib/types";
 
 export default function Hud({
@@ -18,28 +17,27 @@ export default function Hud({
   onToggleMute: () => void;
   onSignOut: () => void;
 }) {
-  const stage = STAGES[Math.min(state.stage, FINAL_STAGE)];
+  const live = state.plots.filter((p) => p.plant && !p.plant.dead).length;
+  const todo = state.plots.filter(
+    (p) => p.plant && p.plant.thirsty && !p.plant.isBloomed && !p.plant.dead
+  ).length;
+
   return (
     <div className="hud-top">
       <div className="hud-card">
-        <div className="hud-day">☀️ Day {state.dayNumber}</div>
+        <div className="hud-day">🌿 {state.gardenName}</div>
         <div className="hud-stage">
-          {stage.emoji} {stage.name}
-          {state.wilted ? " · 🥀 thirsty!" : ""}
+          {state.displayName ?? "Gardener"} · {live}/{state.plotCount} plots growing
         </div>
-        <div className="hud-progress" title={`Stage ${state.stage + 1} of ${STAGES.length}`}>
-          {STAGES.map((_, i) => (
-            <span
-              key={i}
-              className={`hud-dot ${i === FINAL_STAGE ? "bloom-dot" : ""} ${i <= state.stage ? "on" : ""}`}
-            />
-          ))}
+        <div className="hud-statrow">
+          <span className="stat score" title="Garden score">🏆 {state.gardenScore}</span>
+          <span className="stat dew" title="Dewdrops">💧 {state.dewdrops}</span>
+          {todo > 0 && <span className="stat todo">{todo} need care</span>}
         </div>
-        {state.streak > 1 && <div className="hud-streak">🔥 {state.streak}-day streak</div>}
       </div>
       <div className="hud-buttons">
-        <button className="hud-icon-btn" onClick={onJournal} title="Journal">📖</button>
-        <button className="hud-icon-btn" onClick={onStudio} title="Customize gardener">🎨</button>
+        <button className="hud-icon-btn" onClick={onJournal} title="Almanac">📖</button>
+        <button className="hud-icon-btn" onClick={onStudio} title="Profile & gardener">🎨</button>
         <button className="hud-icon-btn" onClick={onToggleMute} title={muted ? "Unmute" : "Mute"}>
           {muted ? "🔇" : "🔊"}
         </button>

@@ -1,8 +1,8 @@
 "use client";
 
-import { STAGES } from "@/lib/stages";
+import { SPECIES, careSummary, PLOT_LABEL } from "@/lib/species";
 import type { CompletedLily, GardenState } from "@/lib/types";
-import StageArt from "./StageArt";
+import PlantIcon from "./PlantIcon";
 
 export default function Journal({
   state,
@@ -13,51 +13,54 @@ export default function Journal({
   completed: CompletedLily[] | null;
   onClose: () => void;
 }) {
-  const everBloomed = state.completedCount > 0;
-  const maxUnlocked = everBloomed ? 6 : state.stage;
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="journal" onClick={(e) => e.stopPropagation()}>
         <div className="journal-head">
-          <h2>📖 Lily Almanac</h2>
+          <h2>📖 Almanac</h2>
           <button className="btn ghost small" onClick={onClose}>✕ close</button>
         </div>
         <p className="journal-sub">
-          Every stage your care has unlocked. Water daily to reveal them all!
+          Every species and what it asks of you. Locked entries arrive with the Shop.
         </p>
+
         <div className="journal-grid">
-          {STAGES.map((s, i) => {
-            const unlocked = i <= maxUnlocked;
+          {SPECIES.map((s) => {
+            const unlocked = state.unlockedSpecies.includes(s.key);
             return (
-              <div key={s.name} className={`stage-card ${unlocked ? "" : "locked"}`}>
-                <span className="stage-num">Stage {i + 1}</span>
+              <div key={s.key} className={`stage-card ${unlocked ? "" : "locked"}`}>
+                <span className="stage-num">{s.points} pts</span>
                 <div className="art">
-                  <StageArt stage={i} size={84} />
+                  <PlantIcon species={s} stage={6} size={72} />
                 </div>
-                <h4>{unlocked ? `${s.emoji} ${s.name}` : "? ? ?"}</h4>
-                <p>{unlocked ? s.blurb : "Keep watering to discover this stage…"}</p>
+                <h4>{s.name}</h4>
+                <p className="seed-care">{careSummary(s)}</p>
+                <p>{unlocked ? s.blurb : `Unlock for ${s.unlockCost} dewdrops.`}</p>
+                <p className="seed-care">Matures in {s.maturesDays} days · {PLOT_LABEL[s.needsPlot]}</p>
               </div>
             );
           })}
         </div>
 
         <div className="gallery">
-          <h3>🌸 Bloom Gallery</h3>
+          <h3>🌸 Harvest record</h3>
           {completed === null ? (
             <p className="gallery-empty">Leafing through the pages…</p>
           ) : completed.length === 0 ? (
             <p className="gallery-empty">
-              No blooms yet — your first fully-grown lily will be pressed into these pages.
+              Nothing harvested yet — your first full bloom will be pressed into these pages.
             </p>
           ) : (
             <div className="gallery-row">
-              {completed.map((c, i) => (
-                <span key={c.id} className="gallery-chip">
-                  🌸 Lily #{completed.length - i} · {c.days_taken} days
-                  {c.perfect ? " · perfect ✨" : ""}
-                </span>
-              ))}
+              {completed.map((c, i) => {
+                const sp = SPECIES.find((s) => s.key && completed && c.species_id === SPECIES.indexOf(s) + 1);
+                return (
+                  <span key={c.id} className="gallery-chip">
+                    🌸 {sp?.name ?? `Bloom #${completed.length - i}`} · {c.days_taken} days
+                    {c.perfect ? " · perfect ✨" : ""}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>

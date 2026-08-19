@@ -5,12 +5,14 @@ import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 import { GameBridge } from "@/game/bridge";
 import { sfx } from "@/game/audio";
-import type { CompletedLily, GardenState, WaterResult } from "@/lib/types";
-import { welcomeMessage, waterMessage } from "@/lib/messages";
+import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
+import type { CompletedLily, GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
+import { welcomeMessage, tendMessage } from "@/lib/messages";
 import Hud from "./Hud";
+import PlotBar from "./PlotBar";
 import Journal from "./Journal";
 import AvatarStudio from "./AvatarStudio";
-import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
+import SeedPicker from "./SeedPicker";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
 
@@ -22,124 +24,163 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [toast, setToast] = useState<string | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
-  const [avatar, setAvatar] = useState<Avatar>(DEFAULT_AVATAR);
+  const [seedFor, setSeedFor] = useState<PlotState | null>(null);
   const [completed, setCompleted] = useState<CompletedLily[] | null>(null);
   const [muted, setMuted] = useState(false);
-  const [nearPond, setNearPond] = useState(false);
-  const [replanting, setReplanting] = useState(false);
+  const [avatar, setAvatar] = useState<Avatar>(DEFAULT_AVATAR);
+  const [selected, setSelected] = useState(0);
+  const [busy, setBusy] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const watering = useRef(false);
+  const acting = useRef(false);
 
-  const showToast = useCallback((msg: string, ms = 5200) => {
+  const showToast = useCallback((msg: string, ms = 5600) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast(msg);
     toastTimer.current = setTimeout(() => setToast(null), ms);
   }, []);
 
-  // Initial load
+  const applyState = useCallback(
+    (s: GardenState) => {
+      setState(s);
+      bridge.setGarden(s);
+    },
+    [bridge]
+  );
+
+  // ---- initial load ----
   useEffect(() => {
     sfx.init();
     setMuted(sfx.muted);
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    supabase
-      .rpc("get_garden_state", { p_timezone: timezone })
-      .then(({ data, error }) => {
-        if (error) {
-          setError(error.message);
-          return;
-        }
-        const s = data as GardenState;
-        const av = safeAvatar(s.avatar);
-        setState(s);
-        setAvatar(av);
-        bridge.setAvatar(av);
-        bridge.setGarden(s);
-        showToast(welcomeMessage(s), 6500);
-      });
-  }, [supabase, bridge, showToast]);
+    supabase.rpc("get_garden_state", { p_timezone: timezone }).then(({ data, error }) => {
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      const s = data as GardenState;
+      const av = safeAvatar(s.avatar);
+      setAvatar(av);
+      bridge.setAvatar(av);
+      applyState(s);
+      const firstInteresting = s.plots.findIndex(
+        (p) => p.unlocked && p.plant && p.plant.thirsty && !p.plant.isBloomed
+      );
+      const fallback = s.plots.findIndex((p) => p.unlocked && p.plant);
+      const pick = firstInteresting >= 0 ? firstInteresting : fallback >= 0 ? fallback : 0;
+      setSelected(pick);
+      bridge.select(pick);
+      showToast(welcomeMessage(s), 7000);
+    });
+  }, [supabase, bridge, applyState, showToast]);
 
-  // Scene → React wiring
+  // ---- scene -> React ----
   useEffect(() => {
-    bridge.onNearPond = setNearPond;
-    bridge.onPourStart = async () => {
-      if (watering.current) return;
-      watering.current = true;
+    bridge.onPlotTapped = (i) => setSelected(i);
+    bridge.onPourStart = async (plotIdx, action) => {
+      if (acting.current) return;
+      acting.current = true;
+      setBusy(true);
       sfx.pour();
       try {
-        const { data, error } = await supabase.rpc("water_lily");
+        const { data, error } = await supabase.rpc("tend_plant", {
+          p_plot_idx: plotIdx,
+          p_action: action,
+        });
         if (error) throw new Error(error.message);
-        const result = data as WaterResult;
-        // Let the pour animation breathe before the payoff
+        const result = data as TendResult;
         setTimeout(() => {
           bridge.applyOutcome(result);
-          if (result.state) {
-            setState(result.state);
-          }
-          if (result.status === "watered") {
+          if (result.state) setState(result.state);
+          if (result.status === "watered" || result.status === "fed" || result.status === "pruned") {
             sfx.splash();
             if (result.bloomedNow) sfx.bloom();
             else if (result.grew) sfx.grow();
           } else {
             sfx.wiggle();
           }
-          showToast(
-            waterMessage(result.status, result.grew, result.bloomedNow, result.wasWilted),
-            6000
-          );
-          watering.current = false;
-        }, 900);
+          showToast(tendMessage(result));
+          acting.current = false;
+          setBusy(false);
+        }, 850);
       } catch (e) {
         bridge.applyOutcome({ status: "error" });
-        showToast("Hmm, the watering can sprang a leak (network error). Try again!");
-        watering.current = false;
+        showToast("The watering can sprang a leak (network error). Try again!");
+        acting.current = false;
+        setBusy(false);
         void e;
       }
     };
     return () => {
-      bridge.onNearPond = null;
       bridge.onPourStart = null;
+      bridge.onPlotTapped = null;
     };
   }, [bridge, supabase, showToast]);
+
+  // ---- actions ----
+  const selectPlot = useCallback(
+    (i: number) => {
+      sfx.click();
+      setSelected(i);
+      bridge.select(i);
+    },
+    [bridge]
+  );
+
+  const tend = useCallback(
+    (i: number, a: TendAction) => {
+      if (busy) return;
+      bridge.tend(i, a);
+    },
+    [bridge, busy]
+  );
+
+  const plantSeed = useCallback(
+    async (key: string) => {
+      if (!seedFor) return;
+      setBusy(true);
+      const { data, error } = await supabase.rpc("plant_seed", {
+        p_plot_idx: seedFor.idx,
+        p_species: key,
+      });
+      setBusy(false);
+      setSeedFor(null);
+      if (error) {
+        showToast(error.message);
+        return;
+      }
+      applyState(data as GardenState);
+      sfx.grow();
+      showToast("Planted! Keep to its schedule and it will thrive. 🌱");
+    },
+    [supabase, seedFor, applyState, showToast]
+  );
+
+  const clearPlot = useCallback(
+    async (i: number) => {
+      if (busy) return;
+      setBusy(true);
+      const { data, error } = await supabase.rpc("clear_plot", { p_plot_idx: i });
+      setBusy(false);
+      if (error) {
+        showToast(error.message);
+        return;
+      }
+      applyState(data as GardenState);
+      sfx.click();
+      showToast("Plot cleared and ready for a new seed. 🌱");
+    },
+    [supabase, applyState, showToast, busy]
+  );
 
   const openJournal = useCallback(async () => {
     sfx.click();
     setJournalOpen(true);
     const { data } = await supabase
       .from("completed_lilies")
-      .select("id, days_taken, waters, perfect, completed_at")
+      .select("id, days_taken, waters, perfect, completed_at, species_id")
       .order("completed_at", { ascending: false });
     setCompleted((data as CompletedLily[]) ?? []);
   }, [supabase]);
-
-  const replant = useCallback(async () => {
-    if (replanting) return;
-    setReplanting(true);
-    sfx.click();
-    const { data, error } = await supabase.rpc("replant");
-    setReplanting(false);
-    if (error) {
-      showToast("Couldn't replant just now — try again!");
-      return;
-    }
-    const result = data as WaterResult;
-    if (result.state) {
-      setState(result.state);
-      bridge.setGarden(result.state);
-    }
-    showToast("A brand-new seed settles into the pond. Day 1 begins again! 🫘", 6000);
-  }, [supabase, bridge, showToast, replanting]);
-
-  const openStudio = useCallback(() => {
-    sfx.click();
-    setStudioOpen(true);
-  }, []);
-
-  const previewAvatar = useCallback(
-    (a: Avatar) => {
-      bridge.setAvatar(a); // live-repaint the sprite behind the modal
-    },
-    [bridge]
-  );
 
   const saveAvatar = useCallback(
     async (a: Avatar) => {
@@ -182,8 +223,6 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     );
   }
 
-  const canWater = !!state && !state.wateredToday && !state.isBloomed;
-
   return (
     <main className="garden-wrap">
       <div className="game-frame">
@@ -194,7 +233,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             state={state}
             muted={muted}
             onJournal={openJournal}
-            onStudio={openStudio}
+            onStudio={() => { sfx.click(); setStudioOpen(true); }}
             onToggleMute={toggleMute}
             onSignOut={signOut}
           />
@@ -203,49 +242,40 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
         {!state && (
           <div className="game-loading">
             <div className="loading-drop" />
-            finding your pond…
+            finding your garden…
           </div>
         )}
 
         {toast && <div className="toast">{toast}</div>}
-
-        {state?.isBloomed && (
-          <div className="bloom-banner">
-            <h3>🌸 Full Bloom!</h3>
-            <p>
-              Grown in {state.dayNumber} day{state.dayNumber === 1 ? "" : "s"} with{" "}
-              {state.waters} waterings{state.missedDays === 0 ? " — a perfect streak! ✨" : "."}
-              <br />
-              Your lily will be pressed into the journal when you replant.
-            </p>
-            <button className="btn pink" onClick={replant} disabled={replanting}>
-              {replanting ? "…" : "🫘 Plant a new seed"}
-            </button>
-          </div>
-        )}
-
-        <div className="hud-bottom">
-          {state && !state.isBloomed && (
-            <button
-              className={`btn blue water-btn ${canWater ? "" : "done"}`}
-              onClick={() => {
-                if (canWater) bridge.water();
-                else showToast("Already watered today! Come back tomorrow 🌙");
-              }}
-            >
-              {canWater ? "💧 Water the lily" : "✓ Watered today"}
-            </button>
-          )}
-          <div className="key-hints">
-            ← → / A D walk · E or Space to water{nearPond ? " · you're by the pond!" : ""}
-          </div>
-        </div>
       </div>
+
+      {state && (
+        <PlotBar
+          state={state}
+          selected={selected}
+          busy={busy}
+          onSelect={selectPlot}
+          onTend={tend}
+          onPlant={(p) => { sfx.click(); setSeedFor(p); }}
+          onClear={clearPlot}
+        />
+      )}
+
+      {seedFor && state && (
+        <SeedPicker
+          plot={seedFor}
+          unlocked={state.unlockedSpecies}
+          dewdrops={state.dewdrops}
+          busy={busy}
+          onPlant={plantSeed}
+          onClose={() => setSeedFor(null)}
+        />
+      )}
 
       {studioOpen && (
         <AvatarStudio
           initial={avatar}
-          onPreview={previewAvatar}
+          onPreview={(a) => bridge.setAvatar(a)}
           onSave={saveAvatar}
           onClose={() => setStudioOpen(false)}
         />

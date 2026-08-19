@@ -1,6 +1,8 @@
 import * as Phaser from "phaser";
 import type { GameBridge, SceneApi } from "./bridge";
-import type { GardenState, WaterResult } from "@/lib/types";
+import type { GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
+import { drawPlant } from "./plants";
+import { SPECIES_BY_KEY } from "@/lib/species";
 import { type Ctx, type Stop, lg, rgrad, rr, ell, blob, petalPath } from "./draw";
 import {
   type Avatar,
@@ -30,6 +32,25 @@ const POND_RX = 190;
 const POND_RY = 58;
 const FEET_Y = 548;
 const HX = 152; // house anchor
+
+/** Plot positions. `kind` mirrors the database's plot_kind(idx) exactly. */
+export const PLOTS: Array<{ x: number; y: number; kind: "sun" | "shade" | "water" }> = [
+  { x: 480, y: 466, kind: "water" },
+  { x: 700, y: 498, kind: "sun" },
+  { x: 215, y: 500, kind: "shade" },
+  { x: 795, y: 470, kind: "sun" },
+  { x: 398, y: 480, kind: "water" },
+  { x: 140, y: 468, kind: "shade" },
+  { x: 645, y: 538, kind: "sun" },
+  { x: 560, y: 474, kind: "water" },
+  { x: 285, y: 538, kind: "shade" },
+  { x: 862, y: 512, kind: "sun" },
+  { x: 745, y: 452, kind: "sun" },
+  { x: 120, y: 538, kind: "shade" },
+];
+
+// plant sprite canvas: logical box with the plant's base at (PB_X, PB_Y)
+const PB_W = 180, PB_H = 190, PB_X = 90, PB_Y = 172;
 
 const POND_WOB = [0.05, -0.03, 0.045, 0.02, -0.045, 0.035, -0.02, 0.05, -0.035, 0.025];
 
@@ -61,7 +82,15 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private garden: GardenState | null = null;
 
   private skyTex!: Phaser.Textures.CanvasTexture;
-  private lilyTex!: Phaser.Textures.CanvasTexture;
+  private plotNodes: Array<{
+    tex: Phaser.Textures.CanvasTexture;
+    img: Phaser.GameObjects.Image;
+    bed?: Phaser.GameObjects.Image;
+    lock: Phaser.GameObjects.Container;
+    marker: Phaser.GameObjects.Graphics;
+    zone: Phaser.GameObjects.Zone;
+  }> = [];
+  private selected = 0;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private duskOverlay!: Phaser.GameObjects.Rectangle;
   private starC!: Phaser.GameObjects.Container;
@@ -70,9 +99,6 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private moonImg!: Phaser.GameObjects.Image;
   private windowGlows: Phaser.GameObjects.Rectangle[] = [];
   private rippleG!: Phaser.GameObjects.Graphics;
-  private lilyC!: Phaser.GameObjects.Container;
-  private bloomGlow!: Phaser.GameObjects.Image;
-  private hintDrop!: Phaser.GameObjects.Image;
   private player!: Phaser.GameObjects.Sprite;
   private playerShadow!: Phaser.GameObjects.Image;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -105,6 +131,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
   private autoTarget: number | null = null;
   private pendingPour = false;
+  private pendingAction: TendAction = "water";
+  private pendingPlot = 0;
+  private pipG!: Phaser.GameObjects.Graphics;
   private pouring = false;
   private nearPond = false;
   private nightF = 0;
@@ -124,7 +153,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.buildSky();
     this.buildScenery();
     this.buildPond();
-    this.buildLily();
+    this.buildPlots();
     this.buildGardener();
     this.buildCritters();
     this.buildParticles();
@@ -136,10 +165,16 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       this.keys = kb.addKeys("A,D,E,SPACE") as Record<string, Phaser.Input.Keyboard.Key>;
     }
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      const dx = (p.worldX - POND_X) / (POND_RX + 40);
-      const dy = (p.worldY - POND_Y) / (POND_RY + 60);
-      if (dx * dx + dy * dy < 1.15 || Math.abs(p.worldX - POND_X) < 90) {
-        this.requestWater();
+      let best = -1;
+      let bestD = 78 * 78;
+      PLOTS.forEach((pl, i) => {
+        if (!this.plotUnlocked(i)) return;
+        const d = (p.worldX - pl.x) ** 2 + (p.worldY - (pl.y - 20)) ** 2;
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      if (best >= 0) {
+        this.selectPlot(best);
+        this.bridge.onPlotTapped?.(best);
       } else {
         this.autoTarget = Phaser.Math.Clamp(p.worldX, 40, W - 40);
         this.pendingPour = false;
@@ -156,6 +191,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     }
 
     this.streakG = this.add.graphics().setDepth(14.5);
+    this.pipG = this.add.graphics().setDepth(11.8);
     const nextGust = () => {
       this.launchGust();
       this.time.delayedCall(Phaser.Math.Between(5000, 11000), nextGust);
@@ -179,8 +215,8 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.updateWind(time);
     this.updatePond(time);
     this.updateSplashes(time);
+    this.updatePlotPips(time);
     this.updateCritters(time);
-    this.updateHint();
   }
 
   // ================= bridge api =================
@@ -193,36 +229,46 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   setGarden(s: GardenState) {
     const prev = this.garden;
     this.garden = s;
-    if (!prev || prev.plantId !== s.plantId || prev.stage !== s.stage || prev.wilted !== s.wilted) {
-      this.redrawLily();
-    }
+    if (!prev) this.selected = s.plots.findIndex((p) => p.unlocked && p.plant) ?? 0;
+    if (this.selected < 0) this.selected = 0;
+    for (let i = 0; i < PLOTS.length; i++) this.refreshPlot(i);
+    this.refreshMarkers();
   }
 
-  requestWater() {
+  /** Walk to a plot, then perform the action there. */
+  requestTend(plotIdx: number, action: TendAction) {
     if (this.pouring) return;
-    const side = this.player.x < POND_X ? POND_X - 196 : POND_X + 196;
-    if (Math.abs(this.player.x - side) < 8) {
+    if (!this.plotUnlocked(plotIdx)) return;
+    this.selected = plotIdx;
+    this.pendingAction = action;
+    this.refreshMarkers();
+
+    const p = PLOTS[plotIdx];
+    const side = p.x > W / 2 ? -1 : 1;
+    const standX = Phaser.Math.Clamp(p.x + side * 62, 40, W - 40);
+    if (Math.abs(this.player.x - standX) < 10) {
+      this.player.x = standX;
       this.startPour();
     } else {
-      this.autoTarget = side;
+      this.autoTarget = standX;
       this.pendingPour = true;
     }
   }
 
-  applyOutcome(r: WaterResult) {
+  applyOutcome(r: TendResult) {
     this.endPour();
-    if (r.state) {
-      const grew = !!r.grew && r.status === "watered";
-      const prevStage = this.garden?.stage ?? 0;
-      this.garden = r.state;
-      if (r.status === "watered") {
-        this.splash();
-        if (grew && r.state.stage !== prevStage) this.stagePop();
-        if (r.bloomedNow) this.celebrateBloom();
-        this.happyWiggle();
-      } else {
-        this.happyWiggle();
-      }
+    const idx = this.pendingPlot;
+    if (r.state) this.setGarden(r.state);
+
+    if (r.status === "watered" || r.status === "fed" || r.status === "pruned") {
+      this.splashAt(idx);
+      if (r.grew) this.stagePop(idx);
+      if (r.bloomedNow) this.celebrateBloom(idx);
+      this.happyWiggle(idx);
+    } else if (r.status === "overwatered") {
+      this.sadShake(idx);
+    } else {
+      this.happyWiggle(idx);
     }
   }
 
@@ -876,6 +922,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       const dy = (y - POND_Y) / (POND_RY + 42);
       if (dx * dx + dy * dy < 1) continue;
       if (x > HX - 155 && x < HX + 155 && y < 404) continue;
+      // keep the ground decoration clear of every plot
+      // a grown plant reaches ~130px above its base, so clear that whole column
+      if (PLOTS.some((pl) => Math.abs(pl.x - x) < 66 && y > pl.y - 130 && y < pl.y + 110)) continue;
       spots.push([x, y]);
     }
     spots.forEach(([x, y], i) => {
@@ -1022,207 +1071,188 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     }
   }
 
-  private buildLily() {
-    this.lilyTex = this.textures.createCanvas("lily", 600, 520)!;
-
-    this.lilyC = this.add.container(POND_X, POND_Y).setDepth(10);
-
-    // watery reflection
-    const refl = this.add.image(0, 30, "lily")
-      .setScale(0.5, 0.26)
-      .setFlipY(true)
-      .setOrigin(0.5, 0.28)
-      .setAlpha(0.18)
-      .setTint(0x9fd4ea);
-    this.lilyC.add(refl);
-
-    this.bloomGlow = this.add.image(0, -26, "sunglow")
-      .setScale(0.9)
-      .setBlendMode(Phaser.BlendModes.SCREEN)
-      .setAlpha(0)
-      .setTint(0xffd0e4);
-    this.lilyC.add(this.bloomGlow);
-    this.tweens.add({ targets: this.bloomGlow, scale: { from: 0.85, to: 1 }, duration: 2200, yoyo: true, repeat: -1 });
-
-    const lilyImg = this.add.image(0, 0, "lily").setScale(0.5).setOrigin(0.5, 0.77);
-    this.lilyC.add(lilyImg);
-
-    this.tweens.add({
-      targets: this.lilyC,
-      y: POND_Y - 4,
-      duration: 2100,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut",
+  private buildPlots() {
+    // soil beds so a plot's kind is readable at a glance
+    this.ctex("bed_sun", 200, 90, (c) => {
+      c.scale(2, 2);
+      c.fillStyle = "rgba(30,60,40,0.28)";
+      ell(c, 50, 24, 44, 15); c.fill();
+      c.fillStyle = rgrad(c, 40, 16, 54, [[0, "#c9a173"], [0.55, "#a87d52"], [1, "#87603b"]]);
+      ell(c, 50, 22, 42, 14); c.fill();
+      c.strokeStyle = "rgba(60,38,20,0.35)"; c.lineWidth = 1.6;
+      for (const o of [-16, 0, 16]) {
+        c.beginPath(); c.ellipse(50, 22 + o * 0.18, 34, 4.5, 0, 0, Math.PI * 2); c.stroke();
+      }
+      c.fillStyle = "rgba(255,225,170,0.22)";
+      ell(c, 38, 16, 16, 4); c.fill();
+    });
+    this.ctex("bed_shade", 200, 90, (c) => {
+      c.scale(2, 2);
+      c.fillStyle = "rgba(20,45,32,0.34)";
+      ell(c, 50, 24, 44, 15); c.fill();
+      c.fillStyle = rgrad(c, 40, 16, 54, [[0, "#8d8663"], [0.55, "#6d674c"], [1, "#524d39"]]);
+      ell(c, 50, 22, 42, 14); c.fill();
+      // moss + pebbles
+      c.fillStyle = "rgba(96,140,92,0.55)";
+      for (const [mx, my, mr] of [[32, 20, 8], [62, 26, 7], [50, 16, 6], [72, 18, 5]] as const) {
+        ell(c, mx, my, mr, mr * 0.5); c.fill();
+      }
+      c.fillStyle = "rgba(190,190,175,0.6)";
+      ell(c, 26, 26, 4, 2.4); c.fill(); ell(c, 74, 24, 3.4, 2); c.fill();
     });
 
-    this.hintDrop = this.add
-      .image(POND_X, POND_Y - 66, "hint")
-      .setScale(0.85)
-      .setDepth(10.5)
-      .setAlpha(0);
-    this.tweens.add({
-      targets: this.hintDrop,
-      y: POND_Y - 76,
-      duration: 900,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut",
-    });
+    PLOTS.forEach((pl, i) => {
+      const bed =
+        pl.kind === "water"
+          ? undefined
+          : this.add
+              .image(pl.x, pl.y + 4, pl.kind === "sun" ? "bed_sun" : "bed_shade")
+              .setOrigin(0.5, 0.6)
+              .setScale(0.5)
+              .setDepth(9 + pl.y / 1000)
+              .setVisible(false);
 
-    this.redrawLily();
+      const tex = this.textures.createCanvas("plant_" + i, PB_W * 2, PB_H * 2)!;
+      const img = this.add
+        .image(pl.x, pl.y, "plant_" + i)
+        .setScale(0.5)
+        .setOrigin(PB_X / PB_W, PB_Y / PB_H)
+        .setDepth(10 + pl.y / 1000)
+        .setVisible(false);
+
+      // selection ring + status marker
+      const marker = this.add.graphics().setDepth(9.4 + pl.y / 1000);
+
+      // padlock for plots that are not unlocked yet
+      const lock = this.add.container(pl.x, pl.y - 6).setDepth(10.6 + pl.y / 1000);
+      const lg2 = this.add.graphics();
+      lg2.fillStyle(0x1f3d2d, 0.22);
+      lg2.fillRoundedRect(-15, -12, 30, 24, 6);
+      lg2.lineStyle(2.4, 0xffffff, 0.5);
+      lg2.strokeRoundedRect(-15, -12, 30, 24, 6);
+      lg2.lineStyle(3, 0xffffff, 0.5);
+      lg2.beginPath(); lg2.arc(0, -12, 7, Math.PI, 0); lg2.strokePath();
+      lock.add(lg2);
+
+      const zone = this.add.zone(pl.x, pl.y - 20, 76, 86).setDepth(30);
+
+      this.plotNodes.push({ tex, img, bed, lock, marker, zone });
+    });
   }
 
-  /** paints the lily's current stage into the shared canvas texture (2x, anchor at (150,200) logical) */
-  private redrawLily() {
-    const s = this.garden?.stage ?? 0;
-    const wilted = this.garden?.wilted ?? false;
+  private plotUnlocked(i: number): boolean {
+    return i < (this.garden?.plotCount ?? 0);
+  }
 
-    const c = this.lilyTex.getContext();
-    c.clearRect(0, 0, 600, 520);
+  private plotState(i: number): PlotState | undefined {
+    return this.garden?.plots?.[i];
+  }
+
+  selectPlot(i: number) {
+    if (!this.plotUnlocked(i)) return;
+    this.selected = i;
+    this.refreshMarkers();
+    const p = PLOTS[i];
+    // stand beside the plot, on whichever side keeps the gardener in frame
+    const side = p.x > W / 2 ? -1 : 1;
+    this.autoTarget = Phaser.Math.Clamp(p.x + side * 62, 40, W - 40);
+  }
+
+  /** Repaints one plot's plant into its own canvas texture. */
+  private refreshPlot(i: number) {
+    const node = this.plotNodes[i];
+    const st = this.plotState(i);
+    if (!node) return;
+
+    const unlocked = this.plotUnlocked(i);
+    // Beds only appear once a plot is yours; a single padlock teases the next one.
+    node.bed?.setVisible(unlocked);
+    node.lock.setVisible(!unlocked && i === (this.garden?.plotCount ?? 0));
+
+    const plant = st?.plant ?? null;
+    if (!plant) {
+      node.img.setVisible(false);
+      return;
+    }
+    const sp = SPECIES_BY_KEY[plant.species];
+    if (!sp) { node.img.setVisible(false); return; }
+
+    const c = node.tex.getContext();
+    c.clearRect(0, 0, PB_W * 2, PB_H * 2);
     c.save();
     c.scale(2, 2);
-    c.translate(150, 200); // anchor: pad waterline
-
-    // palettes
-    const leafHi = wilted ? "#b7bd8d" : "#8ed69b";
-    const leafMid = wilted ? "#9aa96b" : "#58b368";
-    const leafLo = wilted ? "#7c8a55" : "#3a8a4e";
-    const petHi = wilted ? "#e3c3cd" : "#ffd3e2";
-    const petMid = wilted ? "#d0a4b2" : "#f7a8c4";
-    const petLo = wilted ? "#b98c9d" : "#ee7fa9";
-    const droop = wilted ? 0.35 : 0;
-
-    const pad = (x: number, y: number, r: number) => {
-      c.save(); c.translate(x, y);
-      c.fillStyle = "rgba(10,50,70,0.35)";
-      ell(c, 2, 3.5, r, r * 0.38); c.fill();
-      c.fillStyle = rgrad(c, -r * 0.35, -r * 0.2, r * 1.6, [[0, leafHi], [0.55, leafMid], [1, leafLo]]);
-      ell(c, 0, 0, r, r * 0.38); c.fill();
-      // vein highlights
-      c.strokeStyle = "rgba(255,255,255,0.28)"; c.lineWidth = 1.4;
-      for (const a of [-0.5, 0.15, 0.8, 1.9, 2.6]) {
-        c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.cos(a) * r * 0.85, Math.sin(a) * r * 0.32); c.stroke();
-      }
-      // notch showing water
-      c.fillStyle = "#3d95bd";
-      c.beginPath(); c.moveTo(0, 0); c.lineTo(-r, -r * 0.15); c.lineTo(-r, r * 0.15); c.closePath(); c.fill();
-      // rim light
-      c.strokeStyle = "rgba(235,255,235,0.4)"; c.lineWidth = 1.6;
-      c.beginPath(); c.ellipse(0, -0.8, r * 0.96, r * 0.34, 0, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
-      c.restore();
-    };
-
-    const stem = (topX: number, topY: number, w = 3.2) => {
-      c.strokeStyle = lg(c, 0, topY, 0, 4, [[0, leafMid], [1, leafLo]]);
-      c.lineWidth = w; c.lineCap = "round";
-      c.beginPath(); c.moveTo(0, 4); c.quadraticCurveTo(topX * 0.3, topY * 0.55, topX, topY); c.stroke();
-    };
-
-    if (s === 0) {
-      // seed in the shallows
-      c.fillStyle = "rgba(30,60,40,0.4)"; ell(c, 0, 4, 14, 5); c.fill();
-      c.fillStyle = rgrad(c, -3, -3, 12, [[0, "#c9a86a"], [0.5, "#9c7a4a"], [1, "#6d5232"]]);
-      ell(c, 0, 0, 8, 6.5); c.fill();
-      c.fillStyle = "rgba(255,240,210,0.7)"; ell(c, -2.8, -2.4, 2.6, 1.8); c.fill();
-    } else if (s === 1) {
-      stem(wilted ? 8 : 0, -26 + droop * 16);
-      const leafS = (sx: number, rot: number, len: number, hi: string) => {
-        c.save(); c.translate(sx, -20 + droop * 12); c.rotate(rot + (sx < 0 ? -droop : droop));
-        c.fillStyle = lg(c, 0, 0, len, 0, [[0, leafLo], [1, hi]]);
-        ell(c, len / 2, 0, len / 2, 4.4); c.fill();
-        c.restore();
-      };
-      leafS(-2, Math.PI - 0.5, 20, leafMid);
-      leafS(2, 0.42, 22, leafHi);
-    } else if (s === 2) {
-      pad(0, 2, 27);
-      c.save(); c.translate(9, 0); c.rotate(0.22 + droop);
-      stem(3, -20, 2.6);
-      c.fillStyle = lg(c, 0, -26, 12, -18, [[0, leafLo], [1, leafHi]]);
-      ell(c, 6, -22, 8, 3.6); c.fill();
-      c.restore();
-    } else if (s === 3) {
-      pad(-4, 2, 38);
-      pad(35, 8, 18);
-      c.fillStyle = "rgba(255,255,255,0.2)";
-      ell(c, -10, -1, 16, 3.4); c.fill();
-    } else if (s === 4) {
-      pad(-8, 3, 37);
-      pad(33, 9, 17);
-      stem(wilted ? 10 : 3, -42 + droop * 20);
-      c.save(); c.translate(wilted ? 10 : 3, -46 + droop * 22); c.rotate(droop);
-      c.fillStyle = rgrad(c, -2, -4, 14, [[0, leafHi], [0.7, leafMid], [1, leafLo]]);
-      ell(c, 0, 0, 7.5, 12); c.fill();
-      c.strokeStyle = "rgba(255,255,255,0.3)"; c.lineWidth = 1.2;
-      c.beginPath(); c.moveTo(0, 8); c.lineTo(0, -8); c.stroke();
-      c.restore();
-    } else if (s === 5) {
-      pad(-10, 3, 39);
-      pad(34, 9, 18);
-      stem(wilted ? 11 : 2, -50 + droop * 22);
-      c.save(); c.translate(wilted ? 12 : 2, -54 + droop * 24); c.rotate(droop);
-      // sepals
-      for (const sd of [-1, 1]) {
-        c.save(); c.rotate(sd * 0.42);
-        c.fillStyle = lg(c, 0, 0, 0, -20, [[0, leafLo], [1, leafMid]]);
-        petalPath(c, 9, 20); c.fill();
-        c.restore();
-      }
-      // blushing bud
-      c.fillStyle = lg(c, 0, 2, 0, -24, [[0, petLo], [0.55, petMid], [1, petHi]]);
-      petalPath(c, 12, 25); c.fill();
-      c.fillStyle = "rgba(255,255,255,0.35)";
-      ell(c, -2.5, -14, 2.6, 6); c.fill();
-      c.restore();
-    } else {
-      // FULL BLOOM
-      pad(0, 5, 44);
-      pad(46, 12, 19);
-      pad(-48, 12, 16);
-      stem(0, -40, 3.6);
-      c.save(); c.translate(0, -52);
-      // soft shadow under flower
-      c.fillStyle = "rgba(120,40,80,0.16)"; ell(c, 0, 46, 26, 7); c.fill();
-      // outer ring
-      for (let k = 0; k < 8; k++) {
-        c.save(); c.rotate((k * Math.PI) / 4 + 0.39);
-        c.fillStyle = lg(c, 0, 0, 0, -30, [[0, petLo], [0.6, petMid], [1, petHi]]);
-        petalPath(c, 12.5, 30); c.fill();
-        c.strokeStyle = "rgba(255,255,255,0.35)"; c.lineWidth = 1;
-        petalPath(c, 12.5, 30); c.stroke();
-        c.restore();
-      }
-      // mid ring
-      for (let k = 0; k < 6; k++) {
-        c.save(); c.rotate((k * Math.PI) / 3);
-        c.fillStyle = lg(c, 0, 0, 0, -24, [[0, petLo], [0.5, petMid], [1, "#ffe3ee"]]);
-        petalPath(c, 11, 24); c.fill();
-        c.restore();
-      }
-      // inner ring
-      for (let k = 0; k < 4; k++) {
-        c.save(); c.rotate((k * Math.PI) / 2 + 0.7);
-        c.fillStyle = lg(c, 0, 0, 0, -16, [[0, "#e56f9e"], [1, petMid]]);
-        petalPath(c, 9, 16); c.fill();
-        c.restore();
-      }
-      // golden heart + stamens
-      c.fillStyle = rgrad(c, -1.5, -1.5, 9, [[0, "#fff2bf"], [0.55, "#ffd76e"], [1, "#eaa93e"]]);
-      ell(c, 0, 0, 8, 8); c.fill();
-      c.fillStyle = "#f5b93e";
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * Math.PI * 2;
-        ell(c, Math.cos(a) * 5.5, Math.sin(a) * 5.5, 1.5, 1.5); c.fill();
-      }
-      c.restore();
-    }
-
+    c.translate(PB_X, PB_Y);
+    drawPlant(c, sp, { stage: plant.stage, wilted: plant.wilted, dead: plant.dead });
     c.restore();
-    this.lilyTex.refresh();
+    node.tex.refresh();
+    node.img.setVisible(true);
+  }
 
-    this.lilyC.setAngle(wilted ? 3 : 0);
-    this.bloomGlow.setAlpha(s >= 6 && !wilted ? 0.5 : 0);
+  private refreshMarkers() {
+    PLOTS.forEach((pl, i) => {
+      const g = this.plotNodes[i]?.marker;
+      if (!g) return;
+      g.clear();
+      if (!this.plotUnlocked(i)) {
+        // only hint at the very next plot, so the yard stays uncluttered
+        if (i === (this.garden?.plotCount ?? 0)) {
+          g.lineStyle(2, 0xffffff, 0.32);
+          g.strokeEllipse(pl.x, pl.y + 2, 60, 23);
+        }
+        return;
+      }
+      const st = this.plotState(i);
+      const sel = i === this.selected;
+      if (sel) {
+        g.lineStyle(3, 0xffe07a, 0.9);
+        g.strokeEllipse(pl.x, pl.y + 3, 70, 27);
+      }
+      const plant = st?.plant;
+      if (!plant) {
+        // empty: dotted "plant here" ring
+        g.lineStyle(2, 0xffffff, sel ? 0.7 : 0.4);
+        g.strokeEllipse(pl.x, pl.y + 3, 52, 20);
+      } else if (plant.dead) {
+        g.lineStyle(3, 0x8a5a4a, 0.8);
+        g.strokeEllipse(pl.x, pl.y + 3, 58, 22);
+      } else if (plant.thirsty) {
+        g.lineStyle(3, 0x5fc3e8, 0.85);
+        g.strokeEllipse(pl.x, pl.y + 3, 58, 22);
+      }
+    });
+  }
+
+  /** Floating status pips (droplet / feed / prune / skull) above each plot. */
+  private updatePlotPips(time: number) {
+    if (!this.garden) return;
+    const g = this.pipG;
+    g.clear();
+    PLOTS.forEach((pl, i) => {
+      if (!this.plotUnlocked(i)) return;
+      const plant = this.plotState(i)?.plant;
+      if (!plant) return;
+      const bob = Math.sin(time / 420 + i) * 3;
+      const y = pl.y - 74 + bob;
+      if (plant.dead) {
+        g.fillStyle(0x6b4a3a, 0.9);
+        g.fillCircle(pl.x, y, 7);
+        return;
+      }
+      if (plant.isBloomed) {
+        g.fillStyle(0xffd76e, 0.95);
+        g.fillCircle(pl.x, y, 7);
+        g.fillStyle(0xffffff, 0.8);
+        g.fillCircle(pl.x - 2, y - 2, 2.4);
+        return;
+      }
+      if (plant.thirsty) {
+        g.fillStyle(0x5fc3e8, 0.95);
+        g.fillCircle(pl.x, y + 2, 6);
+        g.fillTriangle(pl.x - 5.4, y + 1, pl.x + 5.4, y + 1, pl.x, y - 8);
+        g.fillStyle(0xffffff, 0.65);
+        g.fillCircle(pl.x - 2, y + 2, 1.8);
+      }
+    });
   }
 
   private buildGardener() {
@@ -1382,10 +1412,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.playerShadow.setPosition(this.player.x, FEET_Y + 2);
 
     if (this.keys && (Phaser.Input.Keyboard.JustDown(this.keys.E) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE))) {
-      this.requestWater();
+      this.requestTend(this.selected, "water");
     }
 
-    const near = Math.abs(this.player.x - POND_X) < 230;
+    const sel = PLOTS[this.selected] ?? PLOTS[0];
+    const near = Math.abs(this.player.x - sel.x) < 110;
     if (near !== this.nearPond) {
       this.nearPond = near;
       this.bridge.onNearPond?.(near);
@@ -1394,9 +1425,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
   private startPour() {
     if (this.pouring) return;
+    const plot = PLOTS[this.selected] ?? PLOTS[0];
     this.pouring = true;
+    this.pendingPlot = this.selected;
     this.autoTarget = null;
-    this.player.setFlipX(this.player.x > POND_X);
+    this.player.setFlipX(this.player.x > plot.x);
     this.player.play("pour");
 
     this.time.delayedCall(300, () => {
@@ -1410,16 +1443,17 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         delay: 130,
         loop: true,
         callback: () => {
+          const tgt = PLOTS[this.pendingPlot] ?? PLOTS[0];
           this.pourSplashes.push({
-            x: this.player.x + dir * (SPOUT_OFFSET.x + Phaser.Math.Between(24, 48)),
-            y: POND_Y + Phaser.Math.Between(4, 22),
+            x: tgt.x + Phaser.Math.Between(-14, 14),
+            y: tgt.y + Phaser.Math.Between(-4, 10),
             t0: this.time.now,
           });
         },
       });
     });
 
-    this.bridge.onPourStart?.();
+    this.bridge.onPourStart?.(this.pendingPlot, this.pendingAction);
 
     this.pourSafety?.remove();
     this.pourSafety = this.time.delayedCall(8000, () => this.endPour());
@@ -1438,39 +1472,59 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.player.setTexture("g_idle_0");
   }
 
-  private splash() {
-    this.burstRipples.push({ t0: this.time.now });
-    this.time.delayedCall(160, () => this.burstRipples.push({ t0: this.time.now }));
-    this.sparkles.explode(16, POND_X, POND_Y - 40);
+  private splashAt(i: number) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    if (p.kind === "water") {
+      this.burstRipples.push({ t0: this.time.now });
+      this.time.delayedCall(160, () => this.burstRipples.push({ t0: this.time.now }));
+    }
+    this.sparkles.explode(16, p.x, p.y - 34);
   }
 
-  private happyWiggle() {
+  private happyWiggle(i: number) {
+    const img = this.plotNodes[i]?.img;
+    if (!img) return;
+    this.tweens.killTweensOf(img);
+    img.setAngle(0);
     this.tweens.add({
-      targets: this.lilyC,
+      targets: img,
       angle: { from: -5, to: 5 },
       duration: 110,
       yoyo: true,
       repeat: 3,
-      onComplete: () => this.lilyC.setAngle(this.garden?.wilted ? 3 : 0),
+      onComplete: () => img.setAngle(0),
     });
   }
 
-  private stagePop() {
-    this.redrawLily();
-    this.lilyC.setScale(0.55);
+  private sadShake(i: number) {
+    const img = this.plotNodes[i]?.img;
+    if (!img) return;
+    const x0 = PLOTS[i].x;
+    this.tweens.killTweensOf(img);
     this.tweens.add({
-      targets: this.lilyC,
-      scale: 1,
-      duration: 520,
-      ease: "Back.easeOut",
+      targets: img,
+      x: { from: x0 - 4, to: x0 + 4 },
+      duration: 60,
+      yoyo: true,
+      repeat: 5,
+      onComplete: () => img.setX(x0),
     });
-    this.sparkles.explode(26, POND_X, POND_Y - 50);
+    this.sparkles.explode(8, x0, PLOTS[i].y - 30);
   }
 
-  private celebrateBloom() {
-    this.confetti.explode(90, POND_X, POND_Y - 140);
-    this.time.delayedCall(280, () => this.sparkles.explode(30, POND_X, POND_Y - 60));
-    this.time.delayedCall(600, () => this.confetti.explode(50, POND_X, POND_Y - 160));
+  private stagePop(i: number) {
+    const img = this.plotNodes[i]?.img;
+    if (!img) return;
+    img.setScale(0.28);
+    this.tweens.add({ targets: img, scale: 0.5, duration: 520, ease: "Back.easeOut" });
+    this.sparkles.explode(26, PLOTS[i].x, PLOTS[i].y - 44);
+  }
+
+  private celebrateBloom(i: number) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    this.confetti.explode(90, p.x, p.y - 120);
+    this.time.delayedCall(280, () => this.sparkles.explode(30, p.x, p.y - 50));
+    this.time.delayedCall(600, () => this.confetti.explode(50, p.x, p.y - 140));
   }
 
   private updateSplashes(time: number) {
@@ -1537,11 +1591,6 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     }
   }
 
-  private updateHint() {
-    const canWater = !!this.garden && !this.garden.wateredToday && !this.garden.isBloomed;
-    const target = canWater && !this.pouring ? 0.95 : 0;
-    this.hintDrop.setAlpha(Phaser.Math.Linear(this.hintDrop.alpha, target, 0.08));
-  }
 
   private launchBird() {
     const y = Phaser.Math.Between(56, 168);

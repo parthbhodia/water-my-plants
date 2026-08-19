@@ -1,12 +1,13 @@
-import type { GardenState, WaterResult } from "@/lib/types";
+import type { GardenState, TendAction, TendResult } from "@/lib/types";
 import type { Avatar } from "./avatar";
 
 // Thin, framework-free bridge between React (state, network) and the Phaser scene.
 export interface SceneApi {
   setGarden(s: GardenState): void;
   setAvatar(a: Avatar): void;
-  requestWater(): void; // walk to pond + pour
-  applyOutcome(r: WaterResult): void;
+  requestTend(plotIdx: number, action: TendAction): void;
+  selectPlot(i: number): void;
+  applyOutcome(r: TendResult): void;
 }
 
 export class GameBridge {
@@ -15,8 +16,9 @@ export class GameBridge {
   private pendingAvatar: Avatar | null = null;
 
   /** React sets these */
-  onPourStart: (() => void) | null = null; // scene began pouring -> React fires the RPC
+  onPourStart: ((plotIdx: number, action: TendAction) => void) | null = null;
   onNearPond: ((near: boolean) => void) | null = null;
+  onPlotTapped: ((plotIdx: number) => void) | null = null;
 
   /** Scene calls this once it's ready */
   ready(api: SceneApi) {
@@ -39,11 +41,15 @@ export class GameBridge {
     this.sceneApi?.setAvatar(a);
   }
 
-  water() {
-    this.sceneApi?.requestWater();
+  tend(plotIdx: number, action: TendAction) {
+    this.sceneApi?.requestTend(plotIdx, action);
   }
 
-  applyOutcome(r: WaterResult) {
+  select(plotIdx: number) {
+    this.sceneApi?.selectPlot(plotIdx);
+  }
+
+  applyOutcome(r: TendResult) {
     this.sceneApi?.applyOutcome(r);
   }
 }
