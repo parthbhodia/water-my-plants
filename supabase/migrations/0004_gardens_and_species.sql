@@ -341,7 +341,7 @@ begin
                      || (array['Fern','Bloom','Pond','Sprout','Leaf','Lily','Root','Vine',
                                'Bud','Moss','Reed','Sage'])[1 + floor(random()*12)]
                      || floor(random()*90 + 10)::text,
-      friend_code = upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8))
+      friend_code = new_friend_code()  -- see 0005: retries on collision
     where id = v_uid
     returning * into v_profile;
   end if;
