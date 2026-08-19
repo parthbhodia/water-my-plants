@@ -58,12 +58,20 @@ The secret key is not used anywhere in this app.
 The database schema lives in `supabase/migrations/` and was applied to the project as
 migration `lily_days_init`.
 
-## One manual step after deploying
+## Auth notes
 
-In the Supabase dashboard → **Authentication → URL Configuration**, set **Site URL** to
-your deployed URL (and add `https://<your-domain>/auth/callback` to the redirect list).
-Until then, sign-up confirmation emails link to `localhost:3000` — the confirmation still
-registers, but users get an ugly redirect before returning to sign in.
+Sign-up needs **no email round-trip**: a database trigger
+(`supabase/migrations/0002_auto_confirm_users.sql`) auto-confirms new users, and the
+client signs them in immediately after registering. Confirmation emails may still be
+delivered but can be ignored.
+
+To switch to real email verification instead:
+
+1. `drop trigger auto_confirm_users on auth.users;`
+2. In the Supabase dashboard → **Authentication → URL Configuration**, set **Site URL**
+   to your deployed URL and add `https://<your-domain>/auth/callback` to the redirect
+   allow list (otherwise confirmation links point at `localhost:3000`).
+3. Remove the auto-sign-in fallback in `components/AuthForm.tsx`.
 
 ## Controls
 

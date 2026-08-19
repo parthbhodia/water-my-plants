@@ -40,9 +40,17 @@ export default function AuthForm() {
           router.push("/garden");
           router.refresh();
         } else {
-          setNote(
-            "🌱 Almost there! Check your inbox for a confirmation email, then come back here and sign in."
-          );
+          // New users are auto-confirmed server-side (DB trigger), so a
+          // direct sign-in works immediately — no email round-trip needed.
+          const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+          if (!signInErr) {
+            router.push("/garden");
+            router.refresh();
+          } else {
+            setNote(
+              "🌱 Almost there! Check your inbox for a confirmation email, then come back here and sign in."
+            );
+          }
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
