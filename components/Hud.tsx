@@ -7,12 +7,14 @@ export default function Hud({
   state,
   muted,
   onJournal,
+  onStudio,
   onToggleMute,
   onSignOut,
 }: {
   state: GardenState;
   muted: boolean;
   onJournal: () => void;
+  onStudio: () => void;
   onToggleMute: () => void;
   onSignOut: () => void;
 }) {
@@ -37,6 +39,7 @@ export default function Hud({
       </div>
       <div className="hud-buttons">
         <button className="hud-icon-btn" onClick={onJournal} title="Journal">📖</button>
+        <button className="hud-icon-btn" onClick={onStudio} title="Customize gardener">🎨</button>
         <button className="hud-icon-btn" onClick={onToggleMute} title={muted ? "Unmute" : "Mute"}>
           {muted ? "🔇" : "🔊"}
         </button>

@@ -1,5 +1,8 @@
+import type { Avatar } from "@/game/avatar";
+
 export type GardenState = {
   plantId: string;
+  avatar: Avatar;
   stage: number; // 0..6
   dayNumber: number;
   plantedOn: string;

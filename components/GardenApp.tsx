@@ -9,6 +9,8 @@ import type { CompletedLily, GardenState, WaterResult } from "@/lib/types";
 import { welcomeMessage, waterMessage } from "@/lib/messages";
 import Hud from "./Hud";
 import Journal from "./Journal";
+import AvatarStudio from "./AvatarStudio";
+import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
 
@@ -19,6 +21,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [avatar, setAvatar] = useState<Avatar>(DEFAULT_AVATAR);
   const [completed, setCompleted] = useState<CompletedLily[] | null>(null);
   const [muted, setMuted] = useState(false);
   const [nearPond, setNearPond] = useState(false);
@@ -45,7 +49,10 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           return;
         }
         const s = data as GardenState;
+        const av = safeAvatar(s.avatar);
         setState(s);
+        setAvatar(av);
+        bridge.setAvatar(av);
         bridge.setGarden(s);
         showToast(welcomeMessage(s), 6500);
       });
@@ -122,6 +129,35 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     showToast("A brand-new seed settles into the pond. Day 1 begins again! 🫘", 6000);
   }, [supabase, bridge, showToast, replanting]);
 
+  const openStudio = useCallback(() => {
+    sfx.click();
+    setStudioOpen(true);
+  }, []);
+
+  const previewAvatar = useCallback(
+    (a: Avatar) => {
+      bridge.setAvatar(a); // live-repaint the sprite behind the modal
+    },
+    [bridge]
+  );
+
+  const saveAvatar = useCallback(
+    async (a: Avatar) => {
+      const { data, error } = await supabase.rpc("set_avatar", { p_avatar: a });
+      if (error) {
+        showToast("Couldn't save your gardener — try again!");
+        bridge.setAvatar(avatar);
+        return;
+      }
+      const saved = safeAvatar(data as Avatar);
+      setAvatar(saved);
+      bridge.setAvatar(saved);
+      sfx.grow();
+      showToast("Looking sharp! Your gardener is ready for the day. ✨");
+    },
+    [supabase, bridge, showToast, avatar]
+  );
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     window.location.href = "/";
@@ -158,6 +194,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             state={state}
             muted={muted}
             onJournal={openJournal}
+            onStudio={openStudio}
             onToggleMute={toggleMute}
             onSignOut={signOut}
           />
@@ -204,6 +241,15 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           </div>
         </div>
       </div>
+
+      {studioOpen && (
+        <AvatarStudio
+          initial={avatar}
+          onPreview={previewAvatar}
+          onSave={saveAvatar}
+          onClose={() => setStudioOpen(false)}
+        />
+      )}
 
       {journalOpen && state && (
         <Journal state={state} completed={completed} onClose={() => setJournalOpen(false)} />

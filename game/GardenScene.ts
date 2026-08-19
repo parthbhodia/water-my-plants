@@ -1,6 +1,19 @@
 import * as Phaser from "phaser";
 import type { GameBridge, SceneApi } from "./bridge";
 import type { GardenState, WaterResult } from "@/lib/types";
+import { type Ctx, type Stop, lg, rgrad, rr, ell, blob, petalPath } from "./draw";
+import {
+  type Avatar,
+  DEFAULT_AVATAR,
+  paintGardener,
+  safeAvatar,
+  POSES,
+  FRAME_W,
+  FRAME_H,
+  BODY_CX,
+  FEET_LY,
+  SPOUT_OFFSET,
+} from "./avatar";
 
 // ============================================================
 // Lily Days — garden scene, "2.5D" rendering pass
@@ -17,60 +30,6 @@ const POND_RX = 190;
 const POND_RY = 58;
 const FEET_Y = 548;
 const HX = 152; // house anchor
-
-type Ctx = CanvasRenderingContext2D;
-type Stop = [number, string];
-
-function lg(c: Ctx, x0: number, y0: number, x1: number, y1: number, stops: Stop[]) {
-  const g = c.createLinearGradient(x0, y0, x1, y1);
-  for (const [o, col] of stops) g.addColorStop(o, col);
-  return g;
-}
-function rgrad(c: Ctx, x: number, y: number, r: number, stops: Stop[]) {
-  const g = c.createRadialGradient(x, y, 0, x, y, r);
-  for (const [o, col] of stops) g.addColorStop(o, col);
-  return g;
-}
-function rr(c: Ctx, x: number, y: number, w: number, h: number, r: number) {
-  c.beginPath();
-  c.moveTo(x + r, y);
-  c.arcTo(x + w, y, x + w, y + h, r);
-  c.arcTo(x + w, y + h, x, y + h, r);
-  c.arcTo(x, y + h, x, y, r);
-  c.arcTo(x, y, x + w, y, r);
-  c.closePath();
-}
-function ell(c: Ctx, x: number, y: number, rx: number, ry: number) {
-  c.beginPath();
-  c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-  c.closePath();
-}
-/** smooth organic closed blob through wobbled ellipse points */
-function blob(c: Ctx, cx: number, cy: number, rx: number, ry: number, wob: number[], scale = 1) {
-  const n = wob.length;
-  const pts: Array<[number, number]> = wob.map((w, k) => {
-    const a = (k / n) * Math.PI * 2;
-    return [cx + Math.cos(a) * rx * (1 + w) * scale, cy + Math.sin(a) * ry * (1 + w) * scale];
-  });
-  const mid = (a: [number, number], b: [number, number]): [number, number] => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  c.beginPath();
-  const m0 = mid(pts[n - 1], pts[0]);
-  c.moveTo(m0[0], m0[1]);
-  for (let k = 0; k < n; k++) {
-    const p = pts[k];
-    const m = mid(p, pts[(k + 1) % n]);
-    c.quadraticCurveTo(p[0], p[1], m[0], m[1]);
-  }
-  c.closePath();
-}
-/** teardrop petal pointing up from origin */
-function petalPath(c: Ctx, w: number, h: number) {
-  c.beginPath();
-  c.moveTo(0, 0);
-  c.bezierCurveTo(w * 0.58, -h * 0.22, w * 0.52, -h * 0.82, 0, -h);
-  c.bezierCurveTo(-w * 0.52, -h * 0.82, -w * 0.58, -h * 0.22, 0, 0);
-  c.closePath();
-}
 
 const POND_WOB = [0.05, -0.03, 0.045, 0.02, -0.045, 0.035, -0.02, 0.05, -0.035, 0.025];
 
@@ -97,11 +56,6 @@ const SKY_STOPS: Array<[number, number, number, number, number, number]> = [
   [24, 0x0b1836, 0x1c3157, 0x2c4a72, 1, 0],
 ];
 
-type Pose = {
-  legL: number; legR: number; armL: number; armR: number;
-  blink?: boolean; can?: boolean; canTilt?: number;
-};
-
 export class GardenScene extends Phaser.Scene implements SceneApi {
   private bridge: GameBridge;
   private garden: GardenState | null = null;
@@ -125,11 +79,28 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private sparkles!: Phaser.GameObjects.Particles.ParticleEmitter;
   private confetti!: Phaser.GameObjects.Particles.ParticleEmitter;
-  private droplets!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private dropletsR!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private dropletsL!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private splashG!: Phaser.GameObjects.Graphics;
+  private pourSplashes: Array<{ x: number; y: number; t0: number }> = [];
+  private avatar: Avatar = DEFAULT_AVATAR;
   private butterflies: Array<{ s: Phaser.GameObjects.Sprite; tx: number; ty: number; seed: number }> = [];
   private fireflies: Array<{ s: Phaser.GameObjects.Image; a: number; seed: number }> = [];
   private dragonfly!: Phaser.GameObjects.Image;
   private shimmer: Array<{ x: number; y: number; w: number }> = [];
+  // wind: every swaying object samples one shared field, phase-shifted by its
+  // x position, so gusts visibly travel across the yard instead of wobbling in place.
+  private swayers: Array<{
+    o: Phaser.GameObjects.Image;
+    amp: number;
+    base: number;
+    phase: number;
+    lag: number;
+  }> = [];
+  private gusts: Array<{ t0: number; x0: number; power: number; dur: number }> = [];
+  private windDir = 1;
+  private windStreaks: Array<{ x: number; y: number; t0: number; len: number }> = [];
+  private streakG!: Phaser.GameObjects.Graphics;
   private burstRipples: Array<{ t0: number }> = [];
 
   private autoTarget: number | null = null;
@@ -138,6 +109,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private nearPond = false;
   private nightF = 0;
   private pourSafety: Phaser.Time.TimerEvent | null = null;
+  private pourSplashTimer: Phaser.Time.TimerEvent | null = null;
   private hourOverride: number | null = null;
 
   constructor(bridge: GameBridge) {
@@ -183,6 +155,13 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       }) as EventListener);
     }
 
+    this.streakG = this.add.graphics().setDepth(14.5);
+    const nextGust = () => {
+      this.launchGust();
+      this.time.delayedCall(Phaser.Math.Between(5000, 11000), nextGust);
+    };
+    this.time.delayedCall(Phaser.Math.Between(1200, 3000), nextGust);
+
     this.applyTimeOfDay();
     this.time.addEvent({ delay: 60000, loop: true, callback: () => this.applyTimeOfDay() });
 
@@ -197,12 +176,19 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
   update(time: number) {
     this.updatePlayer();
+    this.updateWind(time);
     this.updatePond(time);
+    this.updateSplashes(time);
     this.updateCritters(time);
     this.updateHint();
   }
 
   // ================= bridge api =================
+
+  setAvatar(a: Avatar) {
+    this.avatar = safeAvatar(a);
+    this.paintGardenerFrames();
+  }
 
   setGarden(s: GardenState) {
     const prev = this.garden;
@@ -594,6 +580,31 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       });
     });
 
+    // ---- foreground grass blades (2x, 3 silhouettes) ----
+    for (let v = 0; v < 3; v++) {
+      this.ctex("blade_" + v, 76, 116, (c) => {
+        c.scale(2, 2);
+        const n = 5 + v;
+        for (let k = 0; k < n; k++) {
+          const bx = 6 + k * (26 / n) + (v % 2) * 2;
+          const tip = 30 + ((k * 7 + v * 11) % 22);
+          const lean = -5 + ((k * 5 + v * 3) % 11);
+          const dark = (k + v) % 2 === 0;
+          c.fillStyle = lg(c, 0, 56, 0, 56 - tip, [
+            [0, dark ? "#2f7a45" : "#3c8a4e"],
+            [0.55, dark ? "#4f9e5c" : "#5cb46a"],
+            [1, dark ? "#8ed48a" : "#a6e09b"],
+          ]);
+          c.beginPath();
+          c.moveTo(bx - 2.6, 56);
+          c.quadraticCurveTo(bx + lean * 0.35, 56 - tip * 0.55, bx + lean, 56 - tip);
+          c.quadraticCurveTo(bx + lean * 0.5, 56 - tip * 0.5, bx + 2.6, 56);
+          c.closePath();
+          c.fill();
+        }
+      });
+    }
+
     // ---- grass tuft (2x) ----
     this.ctex("tuft", 60, 56, (c) => {
       c.scale(2, 2);
@@ -664,23 +675,8 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       c.fillRect(0, 0, 480, 300);
     });
 
-    // ---- gardener frames (2x, gradient-shaded) ----
-    const poses: Array<[string, Pose]> = [
-      ["g_idle_0", { legL: 0, legR: 0, armL: 0.12, armR: -0.12 }],
-      ["g_idle_1", { legL: 0, legR: 0, armL: 0.12, armR: -0.12, blink: true }],
-      ["g_walk_0", { legL: -0.5, legR: 0.5, armL: 0.55, armR: -0.4 }],
-      ["g_walk_1", { legL: -0.18, legR: 0.18, armL: 0.2, armR: -0.15 }],
-      ["g_walk_2", { legL: 0.5, legR: -0.5, armL: -0.4, armR: 0.55 }],
-      ["g_walk_3", { legL: 0.18, legR: -0.18, armL: -0.15, armR: 0.2 }],
-      ["g_pour_0", { legL: -0.08, legR: 0.12, armL: 0.9, armR: 1.0, can: true, canTilt: -0.15 }],
-      ["g_pour_1", { legL: -0.08, legR: 0.12, armL: 1.05, armR: 1.15, can: true, canTilt: -0.75 }],
-    ];
-    for (const [key, pose] of poses) {
-      this.ctex(key, 192, 208, (c) => {
-        c.scale(2, 2);
-        this.paintGardener(c, pose);
-      });
-    }
+    // ---- gardener frames (2x, palette-driven) ----
+    this.paintGardenerFrames();
 
     // ---- small graphics-based sprites (particles + critters) ----
     const g = this.add.graphics().setVisible(false);
@@ -755,104 +751,14 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.anims.create({ key: "flap", frames: [{ key: "bird_0" }, { key: "bird_1" }], frameRate: 7, repeat: -1 });
   }
 
-  /** gradient-shaded gardener in a 96x104 logical frame, feet at (48, 100) */
-  private paintGardener(c: Ctx, p: Pose) {
-    const cx = 48;
-    const leg = (hipX: number, ang: number) => {
-      c.save();
-      c.translate(hipX, 66);
-      c.rotate(ang);
-      c.fillStyle = lg(c, -5.5, 0, 5.5, 0, [[0, "#8aa3c9"], [0.5, "#6f8ab3"], [1, "#566f96"]]);
-      rr(c, -5.5, 0, 11, 28, 5); c.fill();
-      c.fillStyle = lg(c, 0, 24, 0, 33, [[0, "#a06b45"], [1, "#6d4628"]]);
-      rr(c, -6.5, 24, 15, 9, 4); c.fill();
-      c.fillStyle = "rgba(255,255,255,0.25)";
-      rr(c, -5, 25, 12, 3, 2); c.fill();
-      c.restore();
-    };
-    leg(cx - 8, p.legL);
-    leg(cx + 8, p.legR);
-
-    // torso
-    c.fillStyle = lg(c, cx - 19, 0, cx + 19, 0, [[0, "#f5a678"], [0.5, "#e58f65"], [1, "#cf7850"]]);
-    rr(c, cx - 19, 36, 38, 22, 9); c.fill();
-    c.fillStyle = lg(c, cx - 17, 44, cx + 17, 72, [[0, "#84a0cb"], [0.55, "#6f8ab3"], [1, "#597097"]]);
-    rr(c, cx - 17, 44, 34, 28, 8); c.fill();
-    // bib highlight
-    c.fillStyle = "rgba(255,255,255,0.14)";
-    rr(c, cx - 14, 46, 12, 22, 6); c.fill();
-    // straps + buttons
-    c.fillStyle = "#5a7299";
-    c.fillRect(cx - 12, 36, 6, 12); c.fillRect(cx + 6, 36, 6, 12);
-    c.fillStyle = rgrad(c, cx - 9, 45, 4, [[0, "#ffe9a8"], [1, "#e5b93e"]]);
-    ell(c, cx - 9, 46, 2.2, 2.2); c.fill();
-    c.fillStyle = rgrad(c, cx + 9, 45, 4, [[0, "#ffe9a8"], [1, "#e5b93e"]]);
-    ell(c, cx + 9, 46, 2.2, 2.2); c.fill();
-    // pocket
-    c.fillStyle = "#5a7299";
-    rr(c, cx - 7, 52, 14, 10, 4); c.fill();
-    c.strokeStyle = "rgba(255,255,255,0.25)"; c.lineWidth = 1.4;
-    rr(c, cx - 7, 52, 14, 10, 4); c.stroke();
-
-    const arm = (shX: number, ang: number, front: boolean) => {
-      c.save();
-      c.translate(shX, 42);
-      c.rotate(ang);
-      c.fillStyle = front
-        ? lg(c, -4.5, 0, 4.5, 0, [[0, "#f5a678"], [1, "#d97d52"]])
-        : "#c9744e";
-      rr(c, -4.5, 0, 9, 24, 4.5); c.fill();
-      c.fillStyle = rgrad(c, -1, 22, 7, [[0, "#ffe3c2"], [1, "#eec096"]]);
-      ell(c, 0, 24, 4.5, 4.5); c.fill();
-      c.restore();
-    };
-    arm(cx - 16, p.armL, false);
-    arm(cx + 16, p.armR, true);
-
-    if (p.can) {
-      c.save();
-      c.translate(cx + 27, 62);
-      c.rotate(p.canTilt ?? 0);
-      c.fillStyle = lg(c, -2, -9, -2, 8, [[0, "#c4e0ee"], [0.5, "#9ec9dd"], [1, "#79aec6"]]);
-      rr(c, -2, -9, 22, 17, 5); c.fill();
-      c.fillStyle = "rgba(255,255,255,0.5)";
-      rr(c, 1, -7, 4, 12, 2); c.fill();
-      c.fillStyle = "#7fb0c9";
-      c.beginPath(); c.moveTo(19, -4); c.lineTo(30, -13); c.lineTo(24, 1); c.closePath(); c.fill();
-      c.fillStyle = "#6a9cb5"; ell(c, 29, -13, 3.5, 2); c.fill();
-      c.strokeStyle = "#7fa8bd"; c.lineWidth = 3;
-      c.beginPath(); c.arc(8, -10, 7, Math.PI, 0, false); c.stroke();
-      c.restore();
+  /** (Re)paints every gardener frame with the current avatar palette. */
+  private paintGardenerFrames() {
+    for (const [key, pose] of POSES) {
+      this.ctex(key, FRAME_W * 2, FRAME_H * 2, (c) => {
+        c.scale(2, 2);
+        paintGardener(c, pose, this.avatar);
+      });
     }
-
-    // head
-    c.fillStyle = "#6b4a2f";
-    ell(c, cx, 22, 15.5, 15.5); c.fill();
-    c.fillStyle = rgrad(c, cx - 5, 19, 20, [[0, "#ffe8cc"], [0.7, "#ffd9b3"], [1, "#efc094"]]);
-    ell(c, cx, 24, 14, 14); c.fill();
-    c.fillStyle = "rgba(247,168,160,0.7)";
-    ell(c, cx - 8.5, 28, 3, 2.4); c.fill(); ell(c, cx + 8.5, 28, 3, 2.4); c.fill();
-    if (p.blink) {
-      c.strokeStyle = "#2f2a26"; c.lineWidth = 2; c.lineCap = "round";
-      c.beginPath(); c.moveTo(cx - 8, 24); c.lineTo(cx - 3, 24); c.stroke();
-      c.beginPath(); c.moveTo(cx + 3, 24); c.lineTo(cx + 8, 24); c.stroke();
-    } else {
-      c.fillStyle = "#2f2a26";
-      ell(c, cx - 5.5, 24, 2.2, 2.4); c.fill(); ell(c, cx + 5.5, 24, 2.2, 2.4); c.fill();
-      c.fillStyle = "rgba(255,255,255,0.9)";
-      ell(c, cx - 4.8, 23.2, 0.8, 0.8); c.fill(); ell(c, cx + 6.2, 23.2, 0.8, 0.8); c.fill();
-    }
-    c.strokeStyle = "#9c5b4a"; c.lineWidth = 2; c.lineCap = "round";
-    c.beginPath(); c.arc(cx, 27.5, 5, 0.35, Math.PI - 0.35, false); c.stroke();
-    // straw hat with shading
-    c.fillStyle = "rgba(120,80,30,0.3)";
-    ell(c, cx, 15.5, 21, 5.5); c.fill();
-    c.fillStyle = lg(c, cx - 21, 8, cx + 21, 18, [[0, "#f5dd94"], [0.55, "#e8c268"], [1, "#cfa54e"]]);
-    ell(c, cx, 13, 21, 5.5); c.fill();
-    c.fillStyle = rgrad(c, cx - 4, 5, 16, [[0, "#f7e3a4"], [0.7, "#e8c268"], [1, "#d3ab52"]]);
-    ell(c, cx, 8, 12, 7); c.fill();
-    c.fillStyle = "#c98d4b";
-    c.fillRect(cx - 12, 8, 24, 4);
   }
 
   // ================= world building =================
@@ -951,14 +857,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         .setOrigin(0.5, 0.72)
         .setScale(scale * 0.55)
         .setDepth(depth + 0.1);
-      this.tweens.add({
-        targets: canopy,
-        angle: { from: -1.5, to: 1.5 },
-        duration: Phaser.Math.Between(2700, 3500),
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.easeInOut",
-      });
+      this.addSwayer(canopy, 2.4, 0, 0.55);
     };
     tree(850, 402, 1.05, 7);
     tree(938, 394, 0.7, 6.8);
@@ -987,16 +886,128 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         .setOrigin(0.5, 1)
         .setScale(Phaser.Math.FloatBetween(0.3, 0.44) * (y > 500 ? 1.18 : 1))
         .setDepth(y > 500 ? 13 : 6.5);
-      this.tweens.add({
-        targets: img,
-        angle: { from: -4, to: 4 },
-        duration: Phaser.Math.Between(1500, 2600),
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.easeInOut",
-        delay: Phaser.Math.Between(0, 1200),
-      });
+      this.addSwayer(img, isFlower ? 5.5 : 7, 0, 1);
     });
+
+    this.buildGrassField();
+  }
+
+  /** Registers an object to sway with the wind field. `lag` slows heavy things (trees). */
+  private addSwayer(o: Phaser.GameObjects.Image, amp: number, base = 0, lag = 1) {
+    this.swayers.push({ o, amp, base, phase: o.x * 0.014, lag });
+  }
+
+  /** Dense foreground grass band — the phase offset makes gusts ripple across it. */
+  private buildGrassField() {
+    for (let i = 0; i < 46; i++) {
+      const x = -20 + i * (W + 40) / 45 + Phaser.Math.Between(-9, 9);
+      const y = 592 + Phaser.Math.Between(0, 18);
+      const g = this.add
+        .image(x, y, "blade_" + (i % 3))
+        .setOrigin(0.5, 1)
+        .setScale(Phaser.Math.FloatBetween(0.42, 0.7))
+        .setDepth(15 + (y - 592) / 100);
+      this.addSwayer(g, 9, 0, 1);
+    }
+  }
+
+  /** Wind = slow breeze + travelling gusts. Returns -1..1-ish at a given x. */
+  private windAt(x: number, time: number, phase: number): number {
+    const breeze = 0.42 * Math.sin(time / 1450 + phase) + 0.18 * Math.sin(time / 640 + phase * 2.3);
+    let gust = 0;
+    for (const g of this.gusts) {
+      const age = (time - g.t0) / g.dur;
+      if (age < 0 || age > 1) continue;
+      // gust front sweeps across the yard at a fixed speed
+      const front = g.x0 + this.windDir * age * (W + 500);
+      const d = Math.abs(x - front);
+      if (d < 320) {
+        const falloff = Math.cos((d / 320) * Math.PI * 0.5);
+        const envelope = Math.sin(age * Math.PI);
+        gust += g.power * falloff * falloff * envelope;
+      }
+    }
+    return breeze + gust;
+  }
+
+  private updateWind(time: number) {
+    this.gusts = this.gusts.filter((g) => time - g.t0 < g.dur);
+    for (const s of this.swayers) {
+      const w = this.windAt(s.o.x, time * s.lag, s.phase);
+      s.o.setAngle(s.base + w * s.amp * this.windDir);
+    }
+
+    // faint streaks riding the strongest gusts
+    const g2 = this.streakG;
+    g2.clear();
+    this.windStreaks = this.windStreaks.filter((st) => {
+      const t = (time - st.t0) / 1150;
+      if (t >= 1) return false;
+      const x = st.x + this.windDir * t * (W * 0.75);
+      const a = Math.sin(t * Math.PI) * 0.24;
+      g2.lineStyle(2, 0xffffff, a);
+      g2.beginPath();
+      g2.moveTo(x, st.y);
+      g2.lineTo(x + this.windDir * st.len, st.y - 5);
+      g2.strokePath();
+      return true;
+    });
+  }
+
+  private launchGust() {
+    this.windDir = Math.random() < 0.72 ? 1 : -1;
+    const power = Phaser.Math.FloatBetween(0.8, 1.9);
+    this.gusts.push({
+      t0: this.time.now,
+      x0: this.windDir === 1 ? -260 : W + 260,
+      power,
+      dur: Phaser.Math.Between(2600, 4200),
+    });
+
+    const n = Math.round(power * 3);
+    for (let i = 0; i < n; i++) {
+      this.windStreaks.push({
+        x: this.windDir === 1 ? Phaser.Math.Between(-120, 120) : Phaser.Math.Between(W - 120, W + 120),
+        y: Phaser.Math.Between(330, 560),
+        t0: this.time.now + i * 90,
+        len: Phaser.Math.Between(30, 80),
+      });
+    }
+    // leaves and petals torn loose by the stronger gusts
+    if (power > 1.15) this.spawnLeaves(Math.round(power * 3));
+  }
+
+  private spawnLeaves(n: number) {
+    const tints = [0x8ed69b, 0x6cc17b, 0xffd76e, 0xf7a8c4];
+    for (let i = 0; i < n; i++) {
+      const fromX = this.windDir === 1 ? -30 : W + 30;
+      const leaf = this.add
+        .image(fromX, Phaser.Math.Between(300, 520), "petalbit")
+        .setTint(Phaser.Utils.Array.GetRandom(tints))
+        .setScale(Phaser.Math.FloatBetween(0.8, 1.5))
+        .setDepth(13.5);
+      const dur = Phaser.Math.Between(3400, 5600);
+      this.tweens.add({
+        targets: leaf,
+        x: this.windDir === 1 ? W + 40 : -40,
+        duration: dur,
+        ease: "Sine.easeInOut",
+        onComplete: () => leaf.destroy(),
+      });
+      this.tweens.add({
+        targets: leaf,
+        y: leaf.y + Phaser.Math.Between(-60, 90),
+        duration: dur / 2,
+        yoyo: true,
+        repeat: 1,
+        ease: "Sine.easeInOut",
+      });
+      this.tweens.add({
+        targets: leaf,
+        angle: Phaser.Math.Between(220, 900) * this.windDir,
+        duration: dur,
+      });
+    }
   }
 
   private buildPond() {
@@ -1219,7 +1230,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.player = this.add
       .sprite(200, FEET_Y, "g_idle_0")
       .setScale(0.5)
-      .setOrigin(0.5, 0.962)
+      .setOrigin(BODY_CX / FRAME_W, FEET_LY / FRAME_H)
       .setDepth(12);
     this.player.play("idle");
 
@@ -1306,17 +1317,22 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       emitting: false,
     }).setDepth(70);
 
-    this.droplets = this.add.particles(0, 0, "drop", {
-      speedX: { min: 12, max: 46 },
-      speedY: { min: 30, max: 80 },
-      gravityY: 420,
-      lifespan: 620,
+    // One emitter per facing direction: the stream must arc *toward* the pond,
+    // so speedX is mirrored rather than always-positive.
+    const dropletCfg = (dir: 1 | -1) => ({
+      speedX: { min: Math.min(dir * 95, dir * 150), max: Math.max(dir * 95, dir * 150) },
+      speedY: { min: -10, max: 30 },
+      gravityY: 760,
+      lifespan: 330,
       quantity: 2,
-      frequency: 34,
+      frequency: 22,
       scale: { min: 0.7, max: 1.15 },
-      alpha: { start: 0.95, end: 0.25 },
+      alpha: { start: 0.95, end: 0.3 },
       emitting: false,
-    }).setDepth(14);
+    });
+    this.dropletsR = this.add.particles(0, 0, "drop", dropletCfg(1)).setDepth(14);
+    this.dropletsL = this.add.particles(0, 0, "drop", dropletCfg(-1)).setDepth(14);
+    this.splashG = this.add.graphics().setDepth(9.5);
   }
 
   private buildPost() {
@@ -1386,8 +1402,21 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.time.delayedCall(300, () => {
       if (!this.pouring) return;
       const dir = this.player.flipX ? -1 : 1;
-      this.droplets.setPosition(this.player.x + dir * 17, this.player.y - 21);
-      this.droplets.start();
+      const em = dir === 1 ? this.dropletsR : this.dropletsL;
+      // spout tip of the tilted can, mirrored with the sprite
+      em.setPosition(this.player.x + dir * SPOUT_OFFSET.x, this.player.y + SPOUT_OFFSET.y);
+      em.start();
+      this.pourSplashTimer = this.time.addEvent({
+        delay: 130,
+        loop: true,
+        callback: () => {
+          this.pourSplashes.push({
+            x: this.player.x + dir * (SPOUT_OFFSET.x + Phaser.Math.Between(24, 48)),
+            y: POND_Y + Phaser.Math.Between(4, 22),
+            t0: this.time.now,
+          });
+        },
+      });
     });
 
     this.bridge.onPourStart?.();
@@ -1401,7 +1430,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.pouring = false;
     this.pourSafety?.remove();
     this.pourSafety = null;
-    this.droplets.stop();
+    this.pourSplashTimer?.remove();
+    this.pourSplashTimer = null;
+    this.dropletsR.stop();
+    this.dropletsL.stop();
     this.player.play("idle");
     this.player.setTexture("g_idle_0");
   }
@@ -1441,6 +1473,18 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.time.delayedCall(600, () => this.confetti.explode(50, POND_X, POND_Y - 160));
   }
 
+  private updateSplashes(time: number) {
+    const g = this.splashG;
+    g.clear();
+    this.pourSplashes = this.pourSplashes.filter((s) => {
+      const t = (time - s.t0) / 520;
+      if (t >= 1) return false;
+      g.lineStyle(2, 0xffffff, 0.5 * (1 - t));
+      g.strokeEllipse(s.x, s.y, 6 + 34 * t, (6 + 34 * t) * 0.34);
+      return true;
+    });
+  }
+
   private updatePond(time: number) {
     const g = this.rippleG;
     g.clear();
@@ -1462,9 +1506,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
     for (let i = 0; i < this.shimmer.length; i++) {
       const sh = this.shimmer[i];
-      const a = 0.12 + 0.1 * Math.sin(time / 640 + i * 1.7);
+      const w = this.windAt(sh.x, time, i * 0.9);
+      const a = 0.12 + 0.1 * Math.sin(time / 640 + i * 1.7) + Math.max(0, w) * 0.06;
       g.fillStyle(0xffffff, Math.max(0, a));
-      g.fillRect(sh.x - sh.w / 2, sh.y, sh.w, 2);
+      g.fillRect(sh.x - sh.w / 2 + w * 5, sh.y, sh.w + Math.abs(w) * 8, 2);
     }
   }
 
