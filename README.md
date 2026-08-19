@@ -1,5 +1,7 @@
 # 🌸 Lily Days
 
+**Live:** https://water-my-plants-parthbhodias-projects.vercel.app
+
 A cozy daily water-lily gardening game. Come back **once every real day** to water your
 lily and watch it grow from a sleepy seed to a full bloom over 7 stages. Miss a day and
 it wilts a little (and your streak resets) — but one watering brings it right back.

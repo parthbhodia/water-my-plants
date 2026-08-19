@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+import * as Phaser from "phaser";
 import type { GameBridge, SceneApi } from "./bridge";
 import type { GardenState, WaterResult } from "@/lib/types";
 
@@ -183,7 +183,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
   requestWater() {
     if (this.pouring) return;
-    const side = this.player.x < POND_X ? POND_X - 128 : POND_X + 128;
+    const side = this.player.x < POND_X ? POND_X - 182 : POND_X + 182;
     if (Math.abs(this.player.x - side) < 8) {
       this.startPour();
     } else {
@@ -1074,7 +1074,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.time.delayedCall(300, () => {
       if (!this.pouring) return;
       const dir = this.player.flipX ? -1 : 1;
-      this.droplets.setPosition(this.player.x + dir * 30, this.player.y - 40);
+      this.droplets.setPosition(this.player.x + dir * 34, this.player.y - 42);
       this.droplets.start();
     });
 

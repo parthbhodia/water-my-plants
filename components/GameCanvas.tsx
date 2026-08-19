@@ -12,7 +12,7 @@ export default function GameCanvas({ bridge }: { bridge: GameBridge }) {
     let game: import("phaser").Game | null = null;
 
     (async () => {
-      const Phaser = (await import("phaser")).default;
+      const Phaser = await import("phaser");
       const { GardenScene } = await import("@/game/GardenScene");
       if (destroyed || !hostRef.current) return;
 
