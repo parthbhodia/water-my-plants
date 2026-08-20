@@ -1,10 +1,25 @@
 "use client";
 
+import {
+  Sun, CloudSun, Waves, Droplets, Nut, Scissors, FlaskConical,
+  Flower2, Sprout, Skull, Plus, Clock,
+} from "lucide-react";
 import type { GardenState, PlotState, TendAction } from "@/lib/types";
 import { SPECIES_BY_KEY, windowOpen, PLOT_LABEL } from "@/lib/species";
 import PlantIcon from "./PlantIcon";
 
-const KIND_ICON = { sun: "☀️", shade: "🌥️", water: "💦" } as const;
+const KIND_ICON = { sun: Sun, shade: CloudSun, water: Waves } as const;
+
+/** Stage progress as seven little leaves filling in. */
+function StageDots({ stage, total = 7 }: { stage: number; total?: number }) {
+  return (
+    <span className="stage-dots" aria-label={`stage ${stage + 1} of ${total}`}>
+      {Array.from({ length: total }, (_, i) => (
+        <i key={i} className={i <= stage ? "on" : ""} />
+      ))}
+    </span>
+  );
+}
 
 export default function PlotBar({
   state,
@@ -36,91 +51,121 @@ export default function PlotBar({
   const needsPrune = !!plant && !!sp && sp.prunesRequired > plant.prunesDone && !plant.dead;
   const clearable = !!plant && (plant.isBloomed || plant.dead);
 
-  let statusLine = "";
-  if (!cur) statusLine = "";
-  else if (!plant) statusLine = `${PLOT_LABEL[cur.kind]} · empty`;
-  else if (plant.dead) statusLine = `${sp?.name} · died — clear the plot`;
-  else if (plant.isBloomed) statusLine = `${sp?.name} · full bloom! harvest to free the plot`;
-  else {
-    const bits = [`${sp?.name}`, `day ${plant.dayNumber}`, `stage ${plant.stage + 1}/7`];
-    if (plant.wilted) bits.push(`wilting (${plant.overdueDays}d late)`);
-    else if (!plant.thirsty) bits.push("not thirsty yet");
-    if (sp && sp.feedsRequired) bits.push(`fed ${plant.feedsDone}/${sp.feedsRequired}`);
-    if (sp && sp.prunesRequired) bits.push(`pruned ${plant.prunesDone}/${sp.prunesRequired}`);
-    statusLine = bits.join(" · ");
-  }
-
   return (
     <div className="plotbar">
       <div className="plot-chips">
         {plots.map((p) => {
           const pl = p.plant;
-          const state2 = !pl
+          const psp = pl ? SPECIES_BY_KEY[pl.species] : null;
+          const chipState = !pl
             ? "empty"
             : pl.dead ? "dead"
             : pl.isBloomed ? "bloom"
             : pl.thirsty ? "thirsty"
             : "ok";
+          const Kind = KIND_ICON[p.kind];
           return (
             <button
               key={p.idx}
-              className={`plot-chip s-${state2} ${p.idx === selected ? "sel" : ""}`}
+              className={`plot-chip s-${chipState} ${p.idx === selected ? "sel" : ""}`}
               onClick={() => onSelect(p.idx)}
               title={`Plot ${p.idx + 1} — ${PLOT_LABEL[p.kind]}`}
             >
-              <span className="chip-kind">{KIND_ICON[p.kind]}</span>
-              {pl ? (
-                <PlantIcon species={pl.species} stage={pl.stage} size={30} wilted={pl.wilted} dead={pl.dead} />
-              ) : (
-                <span className="chip-empty">+</span>
+              <span className="chip-kind"><Kind size={12} strokeWidth={2.4} aria-hidden /></span>
+              {pl && (
+                <span className="chip-badge" aria-hidden>
+                  {pl.dead ? <Skull size={12} /> :
+                   pl.isBloomed ? <Flower2 size={12} /> :
+                   pl.thirsty ? <Droplets size={12} /> : <Clock size={12} />}
+                </span>
               )}
-              <span className="chip-n">{p.idx + 1}</span>
+              <span className="chip-art">
+                {pl ? (
+                  <PlantIcon species={pl.species} stage={pl.stage} size={52} wilted={pl.wilted} dead={pl.dead} />
+                ) : (
+                  <Plus size={22} strokeWidth={2.4} className="chip-empty" aria-hidden />
+                )}
+              </span>
+              <span className="chip-name">{pl ? psp?.name.split(" ").pop() : "Plant"}</span>
+              {pl && !pl.dead && <StageDots stage={pl.stage} />}
             </button>
           );
         })}
       </div>
 
-      <div className="plot-actions">
-        <span className="plot-status">{statusLine}</span>
-        <div className="plot-buttons">
-          {!plant && cur && (
-            <button className="btn small" disabled={busy} onClick={() => onPlant(cur)}>
-              🌱 Plant here
-            </button>
-          )}
-          {plant && !clearable && (
-            <>
-              <button
-                className={`btn blue small ${canWater ? "" : "dim"}`}
-                disabled={busy}
-                onClick={() => onTend(selected, "water")}
-              >
-                💧 Water
+      {cur && (
+        <div className="plot-actions">
+          <div className="plot-status-card">
+            {plant && sp ? (
+              <>
+                <b>{sp.name}</b>
+                <span className="ps-line">
+                  {plant.dead ? (
+                    "Died — clear the plot, or revive it with a tonic."
+                  ) : plant.isBloomed ? (
+                    "Full bloom! Harvest to free the plot."
+                  ) : (
+                    <>
+                      Day {plant.dayNumber} · stage {plant.stage + 1} of 7
+                      {plant.wilted
+                        ? ` · wilting, ${plant.overdueDays}d late`
+                        : plant.thirsty
+                        ? " · thirsty now"
+                        : " · watered — come back tomorrow"}
+                      {sp.feedsRequired ? ` · fed ${plant.feedsDone}/${sp.feedsRequired}` : ""}
+                      {sp.prunesRequired ? ` · pruned ${plant.prunesDone}/${sp.prunesRequired}` : ""}
+                    </>
+                  )}
+                </span>
+              </>
+            ) : (
+              <>
+                <b>{PLOT_LABEL[cur.kind]}</b>
+                <span className="ps-line">Empty and ready for a seed.</span>
+              </>
+            )}
+          </div>
+          <div className="plot-buttons">
+            {!plant && (
+              <button className="btn small" disabled={busy} onClick={() => onPlant(cur)}>
+                <Sprout size={15} strokeWidth={2.4} aria-hidden /> Plant here
               </button>
-              {needsFeed && (
-                <button className="btn small" disabled={busy} onClick={() => onTend(selected, "feed")}>
-                  🌰 Feed
+            )}
+            {plant && !clearable && (
+              <>
+                <button
+                  className={`btn blue small ${canWater ? "" : "dim"}`}
+                  disabled={busy}
+                  onClick={() => onTend(selected, "water")}
+                >
+                  <Droplets size={15} strokeWidth={2.4} aria-hidden /> Water
                 </button>
-              )}
-              {needsPrune && (
-                <button className="btn small" disabled={busy} onClick={() => onTend(selected, "prune")}>
-                  ✂️ Prune
-                </button>
-              )}
-            </>
-          )}
-          {plant?.dead && (state.inventory?.tonic ?? 0) > 0 && (
-            <button className="btn small" disabled={busy} onClick={() => onRevive(selected)}>
-              🧪 Revive ({state.inventory.tonic})
-            </button>
-          )}
-          {clearable && (
-            <button className="btn pink small" disabled={busy} onClick={() => onClear(selected)}>
-              {plant?.isBloomed ? "🌸 Harvest" : "🥀 Clear plot"}
-            </button>
-          )}
+                {needsFeed && (
+                  <button className="btn small" disabled={busy} onClick={() => onTend(selected, "feed")}>
+                    <Nut size={15} strokeWidth={2.4} aria-hidden /> Feed
+                  </button>
+                )}
+                {needsPrune && (
+                  <button className="btn small" disabled={busy} onClick={() => onTend(selected, "prune")}>
+                    <Scissors size={15} strokeWidth={2.4} aria-hidden /> Prune
+                  </button>
+                )}
+              </>
+            )}
+            {plant?.dead && (state.inventory?.tonic ?? 0) > 0 && (
+              <button className="btn small" disabled={busy} onClick={() => onRevive(selected)}>
+                <FlaskConical size={15} strokeWidth={2.4} aria-hidden /> Revive ({state.inventory.tonic})
+              </button>
+            )}
+            {clearable && (
+              <button className="btn pink small" disabled={busy} onClick={() => onClear(selected)}>
+                <Flower2 size={15} strokeWidth={2.4} aria-hidden />{" "}
+                {plant?.isBloomed ? "Harvest" : "Clear plot"}
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

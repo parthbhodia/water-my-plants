@@ -9,7 +9,7 @@ type Mode = "signin" | "signup";
 export default function AuthForm() {
   const supabase = createClient();
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);

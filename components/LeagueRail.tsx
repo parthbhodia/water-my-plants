@@ -1,5 +1,6 @@
 "use client";
 
+import { Trophy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import type { LeagueState } from "@/lib/types";
@@ -35,7 +36,7 @@ export default function LeagueRail({
   return (
     <aside className="rail" aria-label="League standings">
       <div className="rail-head">
-        <span className="rail-title">🏆 League</span>
+        <span className="rail-title"><Trophy size={15} strokeWidth={2.4} aria-hidden /> League</span>
         {league && (
           <span className="rail-days">
             {league.daysLeft === 0 ? "Final day" : `${league.daysLeft}d left`}

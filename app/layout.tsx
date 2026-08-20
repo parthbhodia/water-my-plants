@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { Patrick_Hand } from "next/font/google";
 import "./globals.css";
 import PwaSetup from "@/components/PwaSetup";
+
+const hand = Patrick_Hand({ weight: "400", subsets: ["latin"], variable: "--font-hand" });
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 const DESCRIPTION =
@@ -30,6 +33,7 @@ export const metadata: Metadata = {
   publisher: SITE_NAME,
   alternates: { canonical: "/" },
   manifest: "/manifest.webmanifest",
+  verification: { google: "A9C50IFfEPt-9fR_myw1ek_4EuuUVIlQFIGecwXdrvQ" },
   appleWebApp: {
     capable: true,
     title: SITE_NAME,
@@ -72,7 +76,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={hand.variable}>
       <body>
         {children}
         <PwaSetup />

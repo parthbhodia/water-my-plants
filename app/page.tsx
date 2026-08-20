@@ -4,9 +4,14 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AuthForm from "@/components/AuthForm";
-import StageArt from "@/components/StageArt";
+import HeroGarden from "@/components/HeroGarden";
+import WeekStrip from "@/components/WeekStrip";
+import GrannyPledge from "@/components/GrannyPledge";
+import StepRow from "@/components/StepRow";
+import { Reveal } from "@/components/motion/Reveal";
+import { ParallaxLayer } from "@/components/motion/Parallax";
 import Showcase from "@/components/Showcase";
-import PlantTable from "@/components/PlantTable";
+import PlantCards from "@/components/PlantCards";
 import FaqList from "@/components/FaqList";
 import SiteFooter from "@/components/SiteFooter";
 import JsonLd from "@/components/JsonLd";
@@ -21,67 +26,10 @@ export const metadata: Metadata = {
 };
 
 const STEPS = [
-  {
-    n: "1",
-    icon: "🌱",
-    title: "Plant a seed",
-    body:
-      "Pick a plot and a species. A water lily is free and forgiving; a ghost orchid will test you for eighteen days.",
-  },
-  {
-    n: "2",
-    icon: "💧",
-    title: "Come back tomorrow",
-    body:
-      "Each plant takes one watering per day and ignores the rest. There is no way to rush it, so a turn takes about a minute.",
-  },
-  {
-    n: "3",
-    icon: "🏆",
-    title: "Climb the league",
-    body:
-      "Your garden scores every day it stays healthy. Seasons run a week; the board resets, your garden never does.",
-  },
-];
-
-const PILLARS = [
-  {
-    icon: "⏱️",
-    title: "One minute a day",
-    body:
-      "Lily Days is built to be finished, not farmed. Water what is due and close the tab — there is nothing to grind and no timer nagging you back.",
-  },
-  {
-    icon: "🧭",
-    title: "Eight different contracts",
-    body:
-      "The sunflower drinks in daylight, the moonflower after dusk, the fern every other day and the cactus rots if you are early. Learning them is the game.",
-  },
-  {
-    icon: "🌍",
-    title: "Your clock, your day",
-    body:
-      "Deadlines run on the time zone you signed up in, so a player in Sydney and a player in Chicago each get a fair midnight. The server keeps time — device clocks do nothing.",
-  },
-  {
-    icon: "🎨",
-    title: "Drawn entirely in code",
-    body:
-      "Every leaf, cloud, firefly and sound effect is generated at runtime. No sprite sheets, no downloads — the whole garden loads in seconds.",
-  },
-  {
-    icon: "💧",
-    title: "Earned, never bought",
-    body:
-      "Seeds, fertiliser, tools and ornaments cost dewdrops you earn by tending. There is no real-money shop and no advertising anywhere.",
-  },
-  {
-    icon: "📱",
-    title: "Installs like an app",
-    body:
-      "Add Lily Days to your home screen and it opens full-screen, offline-tolerant, exactly like a native app — without an app store in the way.",
-  },
-];
+  { icon: "sprout", title: "Plant a seed", body: "Free lilies are forgiving. Ghost orchids are not." },
+  { icon: "droplets", title: "One water a day", body: "Each plant takes one drink and ignores the rest." },
+  { icon: "trophy", title: "Climb the league", body: "Weekly seasons. The board resets — your garden never does." },
+] as const;
 
 export default async function LandingPage() {
   const supabase = createClient(await cookies());
@@ -133,37 +81,26 @@ export default async function LandingPage() {
     <main className="landing">
       <JsonLd data={jsonLd} />
 
-      <div className="landing-clouds" aria-hidden>
+      <ParallaxLayer speed={-0.22} className="landing-clouds">
         <span className="cloud c1" />
         <span className="cloud c2" />
         <span className="cloud c3" />
-      </div>
+      </ParallaxLayer>
 
       <section className="hero" id="play">
         <div className="hero-copy">
-          <div className="hero-art" aria-hidden>
-            <div className="hero-pond">
-              <StageArt stage={6} size={150} />
-            </div>
-          </div>
           <p className="eyebrow">Free · no adverts · plays in your browser</p>
           <h1>
             Lily <span className="accent">Days</span>
           </h1>
           <p className="tagline">
-            A daily gardening game you finish in a minute. Grow eight species —
-            each wanting something different — and climb a weekly league against
-            gardeners on your own clock.
+            A garden that grows because you showed up. One watering a day —
+            eight species, each on its own schedule, and a weekly league.
           </p>
-          <ul className="feature-list">
-            <li>🌿 8 species, each with its own watering schedule</li>
-            <li>💧 One water per day — the server keeps time, no cheating</li>
-            <li>🏆 A weekly league of gardeners on your clock</li>
-            <li>🌸 Bloom, harvest, and grow something harder</li>
-          </ul>
+          <HeroGarden />
           <p className="hero-links">
-            New here? Read <Link href="/how-to-play">how to play</Link> or browse
-            the <Link href="/plants">plant guides</Link>.
+            <Link href="/how-to-play">How to play</Link> ·{" "}
+            <Link href="/plants">Plant guides</Link>
           </p>
         </div>
         <div className="hero-auth">
@@ -172,60 +109,39 @@ export default async function LandingPage() {
       </section>
 
       <section className="lp-section" id="how">
-        <h2>How Lily Days works</h2>
-        <p className="lp-sub">
-          Three steps, then a minute a day. No tutorial to sit through — though
-          there is one waiting if you want it.
-        </p>
-        <ol className="step-row">
-          {STEPS.map((s) => (
-            <li className="step-card" key={s.n}>
-              <span className="step-icon" aria-hidden>{s.icon}</span>
-              <span className="step-n">Step {s.n}</span>
-              <h3>{s.title}</h3>
-              <p>{s.body}</p>
-            </li>
-          ))}
-        </ol>
+        <Reveal>
+          <h2>Three steps, then a minute a day</h2>
+        </Reveal>
+        <StepRow steps={STEPS} />
       </section>
 
       <section className="lp-section" id="plants">
-        <h2>Every plant wants something different</h2>
-        <p className="lp-sub">
-          The care contract is the whole game. Here is all of it, in one table —
-          or read the <Link href="/plants">full guide for any plant</Link>.
-        </p>
-        <PlantTable />
+        <Reveal>
+          <h2>Every plant wants something different</h2>
+          <p className="lp-sub">
+            Tap any card for its <Link href="/plants">full guide</Link>.
+          </p>
+        </Reveal>
+        <PlantCards />
       </section>
 
       <Showcase />
 
-      <section className="lp-section" id="why">
-        <h2>Why people keep coming back</h2>
-        <div className="pillar-grid">
-          {PILLARS.map((p) => (
-            <article className="pillar" key={p.title}>
-              <span className="pillar-icon" aria-hidden>{p.icon}</span>
-              <h3>{p.title}</h3>
-              <p>{p.body}</p>
-            </article>
-          ))}
-        </div>
+      <section className="lp-section" id="week">
+        <Reveal>
+          <h2>A week in your garden</h2>
+        </Reveal>
+        <WeekStrip />
       </section>
 
       <section className="lp-section" id="faq">
-        <h2>Questions, answered</h2>
+        <Reveal>
+          <h2>Questions, answered</h2>
+        </Reveal>
         <FaqList items={FAQS} />
       </section>
 
-      <section className="lp-cta">
-        <h2>Your first seed takes ten seconds</h2>
-        <p>
-          Sign up with an email and a password. No card, no download, no advert
-          before you play.
-        </p>
-        <a className="btn" href="#play">Start your garden</a>
-      </section>
+      <GrannyPledge />
 
       <SiteFooter />
     </main>
