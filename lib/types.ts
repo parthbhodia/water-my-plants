@@ -78,3 +78,29 @@ export type CompletedLily = {
   completed_at: string;
   species_id: number | null;
 };
+
+export type LeagueMember = {
+  rank: number;
+  name: string;
+  avatar: Avatar;
+  score: number;
+  plants: number;
+  isMe: boolean;
+};
+
+export type LeagueState = {
+  seasonNumber: number;
+  startsOn: string;
+  endsOn: string;
+  daysLeft: number;
+  tier: number;
+  tierName: string;
+  bandLabel: string;
+  myRank: number | null;
+  myScore: number;
+  size: number;
+  promoteN: number;
+  relegateFrom: number | null;
+  members: LeagueMember[];
+  lastSeason: { rank: number; movement: number; tierName: string } | null;
+};

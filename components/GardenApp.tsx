@@ -13,6 +13,7 @@ import PlotBar from "./PlotBar";
 import Journal from "./Journal";
 import AvatarStudio from "./AvatarStudio";
 import SeedPicker from "./SeedPicker";
+import Leaderboard from "./Leaderboard";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
 
@@ -24,6 +25,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [toast, setToast] = useState<string | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
+  const [leagueOpen, setLeagueOpen] = useState(false);
   const [seedFor, setSeedFor] = useState<PlotState | null>(null);
   const [completed, setCompleted] = useState<CompletedLily[] | null>(null);
   const [muted, setMuted] = useState(false);
@@ -234,6 +236,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             muted={muted}
             onJournal={openJournal}
             onStudio={() => { sfx.click(); setStudioOpen(true); }}
+            onLeague={() => { sfx.click(); setLeagueOpen(true); }}
             onToggleMute={toggleMute}
             onSignOut={signOut}
           />
@@ -271,6 +274,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           onClose={() => setSeedFor(null)}
         />
       )}
+
+      {leagueOpen && <Leaderboard onClose={() => setLeagueOpen(false)} />}
 
       {studioOpen && (
         <AvatarStudio

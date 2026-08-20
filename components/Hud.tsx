@@ -7,6 +7,7 @@ export default function Hud({
   muted,
   onJournal,
   onStudio,
+  onLeague,
   onToggleMute,
   onSignOut,
 }: {
@@ -14,6 +15,7 @@ export default function Hud({
   muted: boolean;
   onJournal: () => void;
   onStudio: () => void;
+  onLeague: () => void;
   onToggleMute: () => void;
   onSignOut: () => void;
 }) {
@@ -30,12 +32,15 @@ export default function Hud({
           {state.displayName ?? "Gardener"} · {live}/{state.plotCount} plots growing
         </div>
         <div className="hud-statrow">
-          <span className="stat score" title="Garden score">🏆 {state.gardenScore}</span>
+          <button className="stat score tappable" onClick={onLeague} title="View your league">
+            🏆 {state.gardenScore}
+          </button>
           <span className="stat dew" title="Dewdrops">💧 {state.dewdrops}</span>
           {todo > 0 && <span className="stat todo">{todo} need care</span>}
         </div>
       </div>
       <div className="hud-buttons">
+        <button className="hud-icon-btn" onClick={onLeague} title="League">🏆</button>
         <button className="hud-icon-btn" onClick={onJournal} title="Almanac">📖</button>
         <button className="hud-icon-btn" onClick={onStudio} title="Profile & gardener">🎨</button>
         <button className="hud-icon-btn" onClick={onToggleMute} title={muted ? "Unmute" : "Mute"}>
