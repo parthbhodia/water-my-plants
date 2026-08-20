@@ -6,6 +6,8 @@ import { sfx } from "@/game/audio";
 import { SPECIES_BY_KEY, careSummary } from "@/lib/species";
 import PlantIcon from "./PlantIcon";
 import AvatarPreview from "./AvatarPreview";
+import GuidePortrait from "./GuidePortrait";
+import { GUIDE_NAME } from "@/game/guide";
 import type { Avatar } from "@/game/avatar";
 
 type Step = {
@@ -198,7 +200,13 @@ export default function Tutorial({
     <div className="modal-overlay tut-overlay" role="dialog" aria-modal="true" aria-label="How to play">
       <div className="tut-card">
         <div className="tut-head">
-          <span className="tut-badge">How to play · {i + 1}/{STEPS.length}</span>
+          <div className="tut-guide">
+            <GuidePortrait mood={i === STEPS.length - 1 ? "cheer" : "happy"} size={46} />
+            <div className="tut-guide-id">
+              <b>{GUIDE_NAME}</b>
+              <span>How to play · {i + 1}/{STEPS.length}</span>
+            </div>
+          </div>
           <button className="tut-skip" onClick={() => finish(false)}>Skip</button>
         </div>
 

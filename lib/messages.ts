@@ -1,4 +1,5 @@
 import type { GardenState, TendResult } from "./types";
+import type { GuideMood } from "@/game/guide";
 import { SPECIES_BY_KEY } from "./species";
 
 const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
@@ -69,5 +70,35 @@ export function tendMessage(r: TendResult): string {
       return `${name} is gone. Clear the plot to plant again.`;
     default:
       return "Hmm, that didn't work. Try again!";
+  }
+}
+
+/** Which face Granny Fern pulls for a welcome. */
+export function welcomeMood(s: GardenState): GuideMood {
+  const dead = s.plots.some((p) => p.plant?.dead);
+  const thirsty = s.plots.some((p) => p.plant?.thirsty && !p.plant?.isBloomed && !p.plant?.dead);
+  const bloomed = s.plots.some((p) => p.plant?.isBloomed);
+  if (dead) return "worry";
+  if (bloomed) return "proud";
+  if (thirsty) return "happy";
+  return s.hour >= 21 || s.hour < 5 ? "sleepy" : "happy";
+}
+
+/** Which face goes with a tend outcome. */
+export function tendMood(r: TendResult): GuideMood {
+  switch (r.status) {
+    case "watered":
+    case "fed":
+    case "pruned":
+      return r.bloomedNow ? "proud" : r.grew ? "cheer" : "happy";
+    case "overwatered":
+    case "dead":
+    case "error":
+      return "worry";
+    case "already":
+    case "too_soon":
+      return "sleepy";
+    default:
+      return "happy";
   }
 }

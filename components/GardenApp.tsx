@@ -7,7 +7,10 @@ import { GameBridge } from "@/game/bridge";
 import { sfx } from "@/game/audio";
 import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
 import type { CompletedLily, GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
-import { welcomeMessage, tendMessage } from "@/lib/messages";
+import { welcomeMessage, welcomeMood, tendMessage, tendMood } from "@/lib/messages";
+import type { GuideMood } from "@/game/guide";
+import { GUIDE_NAME } from "@/game/guide";
+import GuidePortrait from "./GuidePortrait";
 import Hud from "./Hud";
 import PlotBar from "./PlotBar";
 import Journal from "./Journal";
@@ -19,6 +22,7 @@ import TabBar, { type PanelTab } from "./TabBar";
 import LeagueRail from "./LeagueRail";
 import TodayBrief from "./TodayBrief";
 import DecorBar from "./DecorBar";
+import RestorePanel from "./RestorePanel";
 import Tutorial from "./Tutorial";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
@@ -28,7 +32,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const bridge = useMemo(() => new GameBridge(), []);
   const [state, setState] = useState<GardenState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ text: string; mood: GuideMood } | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
   const [tab, setTab] = useState<PanelTab>("garden");
   const [seedFor, setSeedFor] = useState<PlotState | null>(null);
@@ -42,9 +46,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acting = useRef(false);
 
-  const showToast = useCallback((msg: string, ms = 5600) => {
+  const showToast = useCallback((msg: string, ms = 5600, mood: GuideMood = "happy") => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast(msg);
+    setToast({ text: msg, mood });
     toastTimer.current = setTimeout(() => setToast(null), ms);
   }, []);
 
@@ -80,7 +84,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       setSelected(pick);
       bridge.select(pick);
       if (s.tutorialDone === false) setTutorial(true);
-      else showToast(welcomeMessage(s), 7000);
+      else showToast(welcomeMessage(s), 7000, welcomeMood(s));
     });
   }, [supabase, bridge, applyState, showToast]);
 
@@ -114,13 +118,13 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           } else {
             sfx.wiggle();
           }
-          showToast(tendMessage(result));
+          showToast(tendMessage(result), 5600, tendMood(result));
           acting.current = false;
           setBusy(false);
         }, 850);
       } catch (e) {
         bridge.applyOutcome({ status: "error" });
-        showToast("The watering can sprang a leak (network error). Try again!");
+        showToast("The watering can sprang a leak (network error). Try again!", 5600, "worry");
         acting.current = false;
         setBusy(false);
         void e;
@@ -290,7 +294,15 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           <div className="key-hints">W A S D / arrows to walk · E to water</div>
         )}
 
-        {toast && <div className="toast">{toast}</div>}
+        {toast && (
+          <div className="toast guide-toast">
+            <GuidePortrait mood={toast.mood} size={54} />
+            <div className="guide-toast-text">
+              <span className="guide-name">{GUIDE_NAME}</span>
+              {toast.text}
+            </div>
+          </div>
+        )}
       </div>
 
       {state && (
@@ -316,6 +328,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             )}
             {tab === "garden" && (
               <DecorBar state={state} onState={applyState} showToast={showToast} />
+            )}
+            {tab === "garden" && (
+              <RestorePanel state={state} onState={applyState} showToast={showToast} />
             )}
             {tab === "shop" && (
               <ShopPanel state={state} onBought={applyState} showToast={showToast} />
@@ -371,7 +386,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
                 return;
               }
             }
-            showToast(welcomeMessage(state), 7000);
+            showToast(welcomeMessage(state), 7000, welcomeMood(state));
           }}
         />
       )}

@@ -4,6 +4,7 @@ import type { GardenState, PlotState, TendAction, TendResult } from "@/lib/types
 import { drawPlant, bloomScale } from "./plants";
 import { SPECIES_BY_KEY } from "@/lib/species";
 import { DECOR_SLOTS, drawDecor, drawKoi } from "./decor";
+import { FIXTURES, ZONE_FOG, FIX_W, FIX_H, FIX_BX, FIX_BY } from "./fixtures";
 import { type Ctx, type Stop, lg, rgrad, rr, ell, blob, petalPath } from "./draw";
 import {
   type Avatar,
@@ -99,6 +100,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   }> = [];
   private selected = 0;
   private decorNodes: Array<{ tex: Phaser.Textures.CanvasTexture; img: Phaser.GameObjects.Image }> = [];
+  private fixtureNodes: Record<string, { tex: Phaser.Textures.CanvasTexture; img: Phaser.GameObjects.Image }> = {};
+  private zoneFog: Record<string, Phaser.GameObjects.Container> = {};
+  private restoredSeen: Set<string> | null = null;
   private koiG!: Phaser.GameObjects.Graphics;
   private koiTex!: Phaser.Textures.CanvasTexture;
   private hasKoi = false;
@@ -169,6 +173,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.buildPond();
     this.buildPlots();
     this.buildDecor();
+    this.buildZones();
     this.buildGardener();
     this.buildCritters();
     this.buildParticles();
@@ -250,6 +255,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     if (this.selected < 0) this.selected = 0;
     for (let i = 0; i < PLOTS.length; i++) this.refreshPlot(i);
     this.refreshDecor();
+    this.refreshZones();
     this.refreshMarkers();
   }
 
@@ -1327,6 +1333,120 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         g.fillStyle(0xffffff, 0.65);
         g.fillCircle(pl.x - 2, y + 2, 1.8);
       }
+    });
+  }
+
+
+  // ---- restoration zones along the fence line ----
+
+  private buildZones() {
+    for (const f of FIXTURES) {
+      const tex = this.ctex(`fix_${f.key}`, FIX_W * 2, FIX_H * 2, () => {});
+      const img = this.add
+        .image(f.x, f.y, `fix_${f.key}`)
+        .setOrigin(FIX_BX / FIX_W, FIX_BY / FIX_H)
+        .setScale(0.62)
+        .setDepth(6.35)
+        .setVisible(false);
+      this.fixtureNodes[f.key] = { tex, img };
+    }
+
+    // soft mist over each locked zone, with a padlock and the level it opens at
+    for (const [zoneKey, fog] of Object.entries(ZONE_FOG)) {
+      const cont = this.add.container(fog.x, fog.y).setDepth(6.55);
+      const g = this.add.graphics();
+      for (let i = 4; i >= 1; i--) {
+        g.fillStyle(0xe8f2e4, 0.16 + i * 0.05);
+        g.fillEllipse(0, 0, fog.rx * 2 * (i / 4), fog.ry * 2 * (i / 4));
+      }
+      // drifting wisps
+      g.fillStyle(0xffffff, 0.22);
+      g.fillEllipse(-fog.rx * 0.4, -8, fog.rx * 0.7, 16);
+      g.fillEllipse(fog.rx * 0.35, 6, fog.rx * 0.6, 14);
+      cont.add(g);
+
+      const lockG = this.add.graphics();
+      lockG.fillStyle(0x1f3d2d, 0.3);
+      lockG.fillRoundedRect(-12, -8, 24, 19, 5);
+      lockG.lineStyle(2.2, 0xffffff, 0.75);
+      lockG.strokeRoundedRect(-12, -8, 24, 19, 5);
+      lockG.lineStyle(2.6, 0xffffff, 0.75);
+      lockG.beginPath(); lockG.arc(0, -8, 6, Math.PI, 0); lockG.strokePath();
+      cont.add(lockG);
+
+      const zdef = this.garden?.zones?.find((z) => z.key === zoneKey);
+      const label = this.add
+        .text(0, 20, zdef ? `Lv ${zdef.minLevel}` : "", {
+          fontFamily: "Trebuchet MS, sans-serif",
+          fontSize: "11px",
+          fontStyle: "bold",
+          color: "#2f4a3d",
+          backgroundColor: "rgba(255,255,255,0.7)",
+          padding: { x: 5, y: 1 },
+        })
+        .setOrigin(0.5, 0.5)
+        .setName("lvl");
+      cont.add(label);
+      this.zoneFog[zoneKey] = cont;
+    }
+  }
+
+  private refreshZones() {
+    const zones = this.garden?.zones ?? [];
+    const firstLoad = this.restoredSeen === null;
+    const seen = this.restoredSeen ?? new Set<string>();
+    this.restoredSeen = seen;
+
+    for (const z of zones) {
+      const fog = this.zoneFog[z.key];
+      if (fog) {
+        const label = fog.getByName("lvl") as Phaser.GameObjects.Text | null;
+        label?.setText(`Lv ${z.minLevel}`);
+        if (z.unlocked && fog.visible) {
+          if (firstLoad) fog.setVisible(false);
+          else {
+            // the mist lifts
+            this.tweens.add({
+              targets: fog, alpha: 0, y: fog.y - 14, duration: 1400, ease: "Sine.easeIn",
+              onComplete: () => fog.setVisible(false),
+            });
+          }
+        } else if (!z.unlocked) {
+          fog.setVisible(true).setAlpha(1);
+        }
+      }
+
+      for (const fx of z.fixtures) {
+        const node = this.fixtureNodes[fx.key];
+        const def = FIXTURES.find((f) => f.key === fx.key);
+        if (!node || !def) continue;
+        node.img.setVisible(z.unlocked);
+        const c = node.tex.getContext();
+        c.clearRect(0, 0, FIX_W * 2, FIX_H * 2);
+        c.save();
+        c.scale(2, 2);
+        def.paint(c, fx.restored);
+        c.restore();
+        node.tex.refresh();
+
+        if (fx.restored && !seen.has(fx.key)) {
+          seen.add(fx.key);
+          if (!firstLoad) this.celebrateRestore(def.x, def.y);
+        }
+      }
+    }
+  }
+
+  /** A little glow-up when a ruin becomes whole again. */
+  private celebrateRestore(x: number, y: number) {
+    this.sparkles.explode(22, x, y - 26);
+    this.time.delayedCall(300, () => this.sparkles.explode(12, x, y - 34));
+    const ring = this.add.graphics().setDepth(6.6);
+    ring.lineStyle(3, 0xffe07a, 0.9);
+    ring.strokeEllipse(x, y - 18, 30, 20);
+    this.tweens.add({
+      targets: ring, alpha: 0, scaleX: 2.1, scaleY: 2.1, duration: 900, ease: "Sine.easeOut",
+      onComplete: () => ring.destroy(),
     });
   }
 

@@ -28,6 +28,23 @@ export type PlotState = {
   plant: PlantState | null;
 };
 
+export type FixtureState = {
+  key: string;
+  name: string;
+  blurb: string;
+  cost: number;
+  restored: boolean;
+};
+
+export type ZoneState = {
+  key: string;
+  name: string;
+  blurb: string;
+  minLevel: number;
+  unlocked: boolean;
+  fixtures: FixtureState[];
+};
+
 export type GardenState = {
   gardenId: string;
   gardenName: string;
@@ -52,6 +69,7 @@ export type GardenState = {
   gardenScore: number;
   completedCount: number;
   tutorialDone: boolean;
+  zones: ZoneState[];
 };
 
 export type TendAction = "water" | "feed" | "prune";
