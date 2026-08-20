@@ -42,6 +42,7 @@ export type GardenState = {
   plots: PlotState[];
   unlockedSpecies: string[];
   inventory: Record<string, number>;
+  decor: Record<string, string>;
   level: number;
   nameChanged: boolean;
   clientTimezone?: string;
@@ -153,4 +154,27 @@ export type TodayBrief = {
   need: { kind: string; count: number; title: string; body: string } | null;
   emailEnabled: boolean;
   nudgeHour: number;
+};
+
+export type Friend = {
+  id: string;
+  name: string;
+  avatar: Avatar;
+  level: number;
+  gardenValue: number;
+  needsHelp: number;
+  visitedToday: boolean;
+};
+
+export type FriendsState = { friendCode: string; friends: Friend[] };
+
+export type ShowcaseGarden = {
+  name: string;
+  avatar: Avatar;
+  level: number;
+  value: number;
+  blooms: number;
+  daysTending: number;
+  plants: Array<{ species: string; stage: number; plotIdx: number }>;
+  decor: Array<{ slot: number; item: string }>;
 };

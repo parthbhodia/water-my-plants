@@ -3,6 +3,7 @@ import type { GameBridge, SceneApi } from "./bridge";
 import type { GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
 import { drawPlant } from "./plants";
 import { SPECIES_BY_KEY } from "@/lib/species";
+import { DECOR_SLOTS, drawDecor, drawKoi } from "./decor";
 import { type Ctx, type Stop, lg, rgrad, rr, ell, blob, petalPath } from "./draw";
 import {
   type Avatar,
@@ -91,6 +92,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     zone: Phaser.GameObjects.Zone;
   }> = [];
   private selected = 0;
+  private decorNodes: Array<{ tex: Phaser.Textures.CanvasTexture; img: Phaser.GameObjects.Image }> = [];
+  private koiG!: Phaser.GameObjects.Graphics;
+  private koiTex!: Phaser.Textures.CanvasTexture;
+  private hasKoi = false;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private duskOverlay!: Phaser.GameObjects.Rectangle;
   private starC!: Phaser.GameObjects.Container;
@@ -154,6 +159,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.buildScenery();
     this.buildPond();
     this.buildPlots();
+    this.buildDecor();
     this.buildGardener();
     this.buildCritters();
     this.buildParticles();
@@ -216,6 +222,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.updatePond(time);
     this.updateSplashes(time);
     this.updatePlotPips(time);
+    this.updateKoi(time);
     this.updateCritters(time);
   }
 
@@ -232,6 +239,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     if (!prev) this.selected = s.plots.findIndex((p) => p.unlocked && p.plant) ?? 0;
     if (this.selected < 0) this.selected = 0;
     for (let i = 0; i < PLOTS.length; i++) this.refreshPlot(i);
+    this.refreshDecor();
     this.refreshMarkers();
   }
 
@@ -1138,6 +1146,56 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
       this.plotNodes.push({ tex, img, bed, lock, marker, zone });
     });
+  }
+
+  private buildDecor() {
+    DECOR_SLOTS.forEach((slot, i) => {
+      const tex = this.textures.createCanvas("decor_" + i, 200, 200)!;
+      const img = this.add
+        .image(slot.x, slot.y, "decor_" + i)
+        .setOrigin(0.5, 0.78)
+        .setScale(0.5)
+        // behind the plots when by the fence, in front of everything when near
+        .setDepth(slot.back ? 6.6 : 15.6)
+        .setVisible(false);
+      this.decorNodes.push({ tex, img });
+    });
+    // koi live in the pond regardless of which slot they were placed in
+    this.koiTex = this.textures.createCanvas("koi", 520, 200)!;
+    this.add.image(POND_X, POND_Y, "koi").setDepth(9.2);
+    this.koiG = this.add.graphics().setDepth(9.2);
+  }
+
+  private refreshDecor() {
+    const placed = this.garden?.decor ?? {};
+    this.hasKoi = Object.values(placed).includes("decor_koi");
+    DECOR_SLOTS.forEach((_, i) => {
+      const node = this.decorNodes[i];
+      if (!node) return;
+      const key = placed[String(i)];
+      if (!key || key === "decor_koi") { node.img.setVisible(false); return; }
+      const c = node.tex.getContext();
+      c.clearRect(0, 0, 200, 200);
+      c.save();
+      c.scale(2, 2);
+      c.translate(50, 78);
+      drawDecor(c, key);
+      c.restore();
+      node.tex.refresh();
+      node.img.setVisible(true);
+    });
+  }
+
+  private updateKoi(time: number) {
+    this.koiG.clear();
+    if (!this.hasKoi) return;
+    const cv = this.koiTex.getContext();
+    cv.clearRect(0, 0, 520, 200);
+    cv.save();
+    cv.translate(260, 100);
+    drawKoi(cv, time);
+    cv.restore();
+    this.koiTex.refresh();
   }
 
   private plotUnlocked(i: number): boolean {

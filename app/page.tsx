@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AuthForm from "@/components/AuthForm";
 import StageArt from "@/components/StageArt";
+import Showcase from "@/components/Showcase";
 
 export default async function LandingPage() {
   const supabase = createClient(await cookies());
@@ -32,20 +33,22 @@ export default async function LandingPage() {
           <p className="tagline">
             A tiny pond. A sleepy seed. One watering a day.
             <br />
-            Come back every day and grow a water lily from seed to full bloom —
-            miss a day and it will droop and wait for you.
+            Grow a garden of eight species, each wanting something different —
+            and climb a weekly league against gardeners on your own clock.
           </p>
           <ul className="feature-list">
-            <li>🌱 7 growth stages over 7 real days of care</li>
-            <li>💧 One water per day — the server keeps time, no cheating!</li>
-            <li>📖 A journal of every stage you unlock</li>
-            <li>🌸 Bloom, celebrate, replant, repeat</li>
+            <li>🌿 8 species, each with its own daily schedule</li>
+            <li>💧 One water per day — the server keeps time, no cheating</li>
+            <li>🏆 A weekly league of gardeners on your clock</li>
+            <li>🌸 Bloom, harvest, and grow something harder</li>
           </ul>
         </div>
         <div className="hero-auth">
           <AuthForm />
         </div>
       </section>
+
+      <Showcase />
 
       <footer className="landing-footer">
         made with 💚 · everything drawn with code, no assets harmed

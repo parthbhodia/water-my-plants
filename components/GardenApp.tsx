@@ -17,6 +17,7 @@ import ShopPanel from "./ShopPanel";
 import ProfilePanel from "./ProfilePanel";
 import TabBar, { type PanelTab } from "./TabBar";
 import TodayBrief from "./TodayBrief";
+import DecorBar from "./DecorBar";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
 
@@ -297,6 +298,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
                 onRevive={revivePlot}
               />
             )}
+            {tab === "garden" && (
+              <DecorBar state={state} onState={applyState} showToast={showToast} />
+            )}
             {tab === "shop" && (
               <ShopPanel state={state} onBought={applyState} showToast={showToast} />
             )}
@@ -310,7 +314,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
                 showToast={showToast}
               />
             )}
-            {tab === "league" && <Leaderboard />}
+            {tab === "league" && <Leaderboard showToast={showToast} />}
           </div>
         </div>
       )}

@@ -1041,3 +1041,132 @@ button { font-family: var(--font); cursor: pointer; }
   border-radius: 8px; border: 2px solid rgba(88,179,104,.35);
   padding: 3px 6px; background: #fff; color: var(--ink);
 }
+
+/* ===== Install prompt ===== */
+.install-bar {
+  position: fixed; left: 12px; right: 12px; bottom: 12px;
+  z-index: 80; max-width: 520px; margin: 0 auto;
+  display: flex; align-items: center; gap: 11px;
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px; padding: 11px 13px;
+  box-shadow: inset 0 1px 0 #fff, var(--shadow-lg);
+  animation: toast-in .4s cubic-bezier(.34,1.56,.64,1);
+  padding-bottom: calc(11px + env(safe-area-inset-bottom, 0px));
+}
+.install-icon { font-size: 1.6rem; flex: none; }
+.install-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.install-text b { font-size: .89rem; }
+.install-text span { font-size: .77rem; color: var(--ink-soft); }
+.install-close {
+  flex: none; border: none; background: transparent; color: var(--ink-soft);
+  font-size: .95rem; padding: 4px 6px; border-radius: 8px;
+}
+.install-close:hover { background: rgba(0,0,0,.06); }
+
+/* standalone: reclaim the notch area */
+@media (display-mode: standalone) {
+  .garden-wrap { padding-top: calc(6px + env(safe-area-inset-top, 0px)); }
+}
+
+/* ===== Neighbours ===== */
+.friend-code-card {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  background: linear-gradient(180deg, #fffdf6, #f2ead6);
+  border: 1px solid rgba(255,255,255,.9); border-radius: 14px;
+  padding: 10px 14px; margin-bottom: 10px;
+  box-shadow: inset 0 1px 0 #fff;
+}
+.fc-label { display: block; font-size: .72rem; font-weight: 800; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: .08em; }
+.fc-code { font-size: 1.15rem; font-weight: 900; letter-spacing: .12em; color: var(--ink); }
+.friend-add { display: flex; gap: 8px; margin-bottom: 10px; }
+.friend-add input {
+  flex: 1; padding: 9px 13px; border-radius: 12px;
+  border: 2px solid rgba(88,179,104,.35); background: rgba(255,255,255,.92);
+  font-family: var(--font); font-size: .95rem; font-weight: 800;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink);
+}
+.friend-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.friend-row {
+  display: flex; align-items: center; gap: 10px;
+  background: linear-gradient(180deg, #fffdf6, #f7f1e2);
+  border: 1px solid rgba(255,255,255,.9); border-left: 4px solid transparent;
+  border-radius: 12px; padding: 6px 12px 6px 8px;
+  box-shadow: inset 0 1px 0 #fff, 0 4px 10px -8px rgba(31,61,45,.35);
+}
+.friend-row.needs { border-left-color: var(--pond-deep); }
+.friend-meta { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.friend-meta b { font-size: .9rem; }
+.friend-meta span { font-size: .76rem; color: var(--ink-soft); }
+
+/* ===== Landing showcase ===== */
+.showcase { width: 100%; max-width: 1080px; margin: 0 auto; padding: 8px 24px 40px; position: relative; }
+.showcase h2 {
+  text-align: center; font-size: clamp(1.4rem, 3vw, 1.9rem); margin: 0 0 6px;
+  background: linear-gradient(180deg, #3f9d58, #2c6e42);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(255,255,255,.6));
+}
+.showcase-sub {
+  text-align: center; color: var(--ink-soft); font-size: .92rem;
+  max-width: 46ch; margin: 0 auto 20px;
+}
+.showcase-row {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+}
+.garden-card {
+  margin: 0; background: var(--glass);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border); border-radius: 18px;
+  overflow: hidden; box-shadow: inset 0 1px 0 #fff, var(--shadow-md);
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease;
+}
+.garden-card:hover { transform: translateY(-5px); box-shadow: inset 0 1px 0 #fff, var(--shadow-lg); }
+.garden-card canvas { display: block; width: 100%; }
+.garden-card figcaption {
+  display: flex; align-items: center; gap: 9px; padding: 9px 12px;
+  background: rgba(255,255,255,.6);
+}
+.gc-av { flex: none; height: 38px; overflow: hidden; }
+.gc-meta { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.gc-meta b { font-size: .88rem; }
+.gc-meta span { font-size: .73rem; color: var(--ink-soft); }
+.gc-value {
+  font-weight: 900; font-size: .95rem; color: var(--clay);
+  font-variant-numeric: tabular-nums;
+}
+
+/* a canvas's intrinsic width otherwise sets each grid track's min-content,
+   collapsing the showcase to a single column */
+.garden-card { min-width: 0; }
+.garden-card canvas { max-width: 100%; }
+
+/* ===== Ornaments ===== */
+.decor-bar {
+  margin-top: 10px; padding-top: 9px;
+  border-top: 1px dashed rgba(62,142,82,.3);
+}
+.decor-owned, .decor-slots { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.decor-slots { margin-top: 8px; }
+.decor-label { font-size: .78rem; font-weight: 800; color: var(--ink-soft); margin-right: 3px; }
+.decor-chip {
+  width: 38px; height: 38px; border-radius: 11px; font-size: 1.15rem;
+  border: 2px solid rgba(255,255,255,.9);
+  background: linear-gradient(180deg, #fffdf6, #f2ead6);
+  box-shadow: inset 0 1px 0 #fff, 0 3px 8px -5px rgba(31,61,45,.4);
+  transition: transform .14s cubic-bezier(.34,1.56,.64,1);
+}
+.decor-chip:hover { transform: translateY(-2px) scale(1.06); }
+.decor-chip.sel { border-color: var(--sun); box-shadow: 0 0 0 3px rgba(255,215,110,.5); }
+.decor-chip.out { opacity: .55; }
+.decor-slot {
+  width: 30px; height: 30px; border-radius: 9px;
+  border: 2px dashed rgba(62,142,82,.45); background: rgba(255,255,255,.6);
+  font-family: var(--font); font-weight: 800; font-size: .8rem; color: var(--ink-soft);
+}
+.decor-slot:hover { background: #fff; border-style: solid; }
+.decor-slot.taken { border-style: solid; background: rgba(255,215,110,.3); }

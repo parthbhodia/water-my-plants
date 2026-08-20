@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import type { HallOfFame, HofEntry, LeagueState } from "@/lib/types";
 import AvatarPreview from "./AvatarPreview";
+import FriendsPanel from "./FriendsPanel";
 
 const TIER_COLOR = ["#a97142", "#8d9aa4", "#c9a227", "#2c7d68", "#c9527a"];
 
-type Tab = "week" | "alltime";
+type Tab = "week" | "alltime" | "friends";
 
 const BOARDS: Array<{ key: keyof Omit<HallOfFame, "me">; title: string; unit: string; hint: string }> = [
   { key: "blooms", title: "🌸 Lifetime blooms", unit: "", hint: "every plant ever brought to full bloom" },
@@ -27,7 +28,7 @@ function Row({ e, unit }: { e: HofEntry; unit: string }) {
   );
 }
 
-export default function Leaderboard() {
+export default function Leaderboard({ showToast }: { showToast: (m: string) => void }) {
   const [tab, setTab] = useState<Tab>("week");
   const [league, setLeague] = useState<LeagueState | null>(null);
   const [hof, setHof] = useState<HallOfFame | null>(null);
@@ -50,6 +51,9 @@ export default function Leaderboard() {
           </button>
           <button className={tab === "alltime" ? "on" : ""} onClick={() => setTab("alltime")}>
             All time
+          </button>
+          <button className={tab === "friends" ? "on" : ""} onClick={() => setTab("friends")}>
+            Neighbours
           </button>
         </div>
 
@@ -121,6 +125,8 @@ export default function Leaderboard() {
             )}
           </>
         )}
+
+        {tab === "friends" && <FriendsPanel showToast={showToast} />}
 
         {tab === "alltime" && (
           <>
