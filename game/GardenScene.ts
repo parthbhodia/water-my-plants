@@ -1574,9 +1574,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     let nx = Phaser.Math.Clamp(x, 34, W - 34);
     let ny = Phaser.Math.Clamp(y, WALK_TOP, WALK_BOTTOM);
 
-    // the gardener does not paddle: push out of the pond along its normal
-    const rx = POND_RX * 0.9;
-    const ry = POND_RY * 0.82;
+    // the gardener does not paddle: push out of the pond along its normal.
+    // The bounds sit just OUTSIDE the painted water — the blob wobbles up to
+    // ~5% past POND_RX/RY, so anything smaller lets him stand in the shallows.
+    const rx = POND_RX * 1.06;
+    const ry = POND_RY * 1.08;
     const dx = (nx - POND_X) / rx;
     const dy = (ny - POND_Y) / ry;
     const d = Math.hypot(dx, dy);
