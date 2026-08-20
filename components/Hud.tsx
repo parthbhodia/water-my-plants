@@ -8,6 +8,7 @@ export default function Hud({
   onJournal,
   onStudio,
   onLeague,
+  onHelp,
   onToggleMute,
   onSignOut,
 }: {
@@ -16,6 +17,7 @@ export default function Hud({
   onJournal: () => void;
   onStudio: () => void;
   onLeague: () => void;
+  onHelp: () => void;
   onToggleMute: () => void;
   onSignOut: () => void;
 }) {
@@ -43,6 +45,7 @@ export default function Hud({
         <button className="hud-icon-btn" onClick={onLeague} title="League">🏆</button>
         <button className="hud-icon-btn" onClick={onJournal} title="Almanac">📖</button>
         <button className="hud-icon-btn" onClick={onStudio} title="Profile & gardener">🎨</button>
+        <button className="hud-icon-btn" onClick={onHelp} title="How to play">❔</button>
         <button className="hud-icon-btn" onClick={onToggleMute} title={muted ? "Unmute" : "Mute"}>
           {muted ? "🔇" : "🔊"}
         </button>

@@ -1227,3 +1227,80 @@ button { font-family: var(--font); cursor: pointer; }
   .rail { display: block; position: sticky; top: 12px; }
   /* the tab stays: the rail shows this week, the tab holds all-time and neighbours */
 }
+
+/* ---------- First-run tutorial ---------- */
+.tut-overlay { z-index: 60; padding: 16px; }
+.tut-card {
+  width: min(520px, 100%);
+  background: linear-gradient(180deg, #fffdf7, #f4ecdc);
+  border: 3px solid rgba(139, 105, 62, 0.35);
+  border-radius: 26px;
+  padding: 18px 22px 20px;
+  box-shadow: inset 0 2px 0 #fff, var(--shadow-lg);
+  animation: toast-in 0.28s ease-out;
+  text-align: center;
+}
+.tut-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.tut-badge {
+  font-size: 0.7rem; font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--leaf-deep); background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(139, 105, 62, 0.25); border-radius: 999px; padding: 4px 11px;
+}
+.tut-skip {
+  background: none; border: none; cursor: pointer; font: inherit;
+  font-size: 0.8rem; font-weight: 800; color: var(--ink-soft); text-decoration: underline;
+}
+.tut-skip:hover { color: var(--ink); }
+.tut-art {
+  min-height: 132px; margin: 12px 0 4px;
+  display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
+}
+.tut-art-gardener canvas { filter: drop-shadow(0 10px 10px rgba(31, 61, 45, 0.28)); }
+.tut-keys { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.tut-keyrow { display: flex; gap: 6px; }
+.tut-key {
+  display: grid; place-items: center; width: 42px; height: 42px;
+  font-weight: 900; font-size: 1.05rem; color: var(--ink);
+  background: linear-gradient(180deg, #fff, #ece2cd);
+  border: 2px solid rgba(139, 105, 62, 0.35); border-radius: 11px;
+  box-shadow: inset 0 1px 0 #fff, 0 4px 0 rgba(139, 105, 62, 0.35);
+}
+.tut-keynote { font-size: 0.78rem; font-weight: 800; color: var(--ink-soft); margin-top: 4px; }
+.tut-species { align-items: flex-start; gap: 10px; }
+.tut-sp {
+  flex: 1 1 128px; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(139, 105, 62, 0.22);
+  border-radius: 14px; padding: 6px 6px 8px;
+}
+.tut-sp b { font-size: 0.8rem; }
+.tut-sp span { font-size: 0.68rem; font-weight: 700; color: var(--leaf-deep); line-height: 1.3; }
+.tut-days { gap: 7px; }
+.tut-day {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  width: 52px; padding: 9px 0; border-radius: 13px;
+  background: rgba(255, 255, 255, 0.55); border: 2px dashed rgba(139, 105, 62, 0.28);
+}
+.tut-day.on { background: linear-gradient(180deg, #eaf7ff, #cfeaf8); border-style: solid; border-color: #8fd3ee; }
+.tut-day span { font-size: 0.68rem; font-weight: 800; color: var(--ink-soft); }
+.tut-day b { font-size: 1.1rem; }
+.tut-trophy { flex-direction: column; gap: 4px; }
+.tut-podium { display: flex; align-items: flex-end; gap: 10px; }
+.tut-medal { font-size: 1.9rem; filter: drop-shadow(0 5px 6px rgba(31, 61, 45, 0.25)); }
+.tut-medal.big { font-size: 3rem; }
+.tut-title { margin: 6px 0 6px; font-size: 1.24rem; }
+.tut-body { margin: 0; font-size: 0.9rem; line-height: 1.55; color: var(--ink-soft); }
+.tut-dots { display: flex; justify-content: center; gap: 7px; margin: 16px 0 14px; }
+.tut-dot {
+  width: 9px; height: 9px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid rgba(139, 105, 62, 0.4); background: rgba(255, 255, 255, 0.7);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.tut-dot.past { background: rgba(93, 155, 106, 0.55); }
+.tut-dot.on { background: var(--leaf-deep); transform: scale(1.45); }
+.tut-actions { display: flex; justify-content: center; gap: 10px; }
+@media (max-width: 520px) {
+  .tut-card { padding: 14px 15px 16px; }
+  .tut-sp { flex-basis: 100%; }
+}
+
+.key-hints { position: absolute; left: 14px; bottom: 12px; pointer-events: none; z-index: 3; }

@@ -19,6 +19,7 @@ import TabBar, { type PanelTab } from "./TabBar";
 import LeagueRail from "./LeagueRail";
 import TodayBrief from "./TodayBrief";
 import DecorBar from "./DecorBar";
+import Tutorial from "./Tutorial";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
 
@@ -37,6 +38,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false);
   const [briefKey, setBriefKey] = useState(0);
+  const [tutorial, setTutorial] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acting = useRef(false);
 
@@ -77,9 +79,15 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       const pick = firstInteresting >= 0 ? firstInteresting : fallback >= 0 ? fallback : 0;
       setSelected(pick);
       bridge.select(pick);
-      showToast(welcomeMessage(s), 7000);
+      if (s.tutorialDone === false) setTutorial(true);
+      else showToast(welcomeMessage(s), 7000);
     });
   }, [supabase, bridge, applyState, showToast]);
+
+  // The gardener should not wander behind an open modal.
+  useEffect(() => {
+    bridge.setFrozen(tutorial || seedFor !== null || journalOpen);
+  }, [bridge, tutorial, seedFor, journalOpen]);
 
   // ---- scene -> React ----
   useEffect(() => {
@@ -265,6 +273,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             onJournal={openJournal}
             onStudio={() => { sfx.click(); setTab("profile"); }}
             onLeague={() => { sfx.click(); setTab("league"); }}
+            onHelp={() => { sfx.click(); setTutorial(true); }}
             onToggleMute={toggleMute}
             onSignOut={signOut}
           />
@@ -275,6 +284,10 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             <div className="loading-drop" />
             finding your garden…
           </div>
+        )}
+
+        {state && !tutorial && (
+          <div className="key-hints">W A S D / arrows to walk · E to water</div>
         )}
 
         {toast && <div className="toast">{toast}</div>}
@@ -337,6 +350,29 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           busy={busy}
           onPlant={plantSeed}
           onClose={() => setSeedFor(null)}
+        />
+      )}
+
+      {tutorial && state && (
+        <Tutorial
+          avatar={avatar}
+          onDone={(plant) => {
+            setTutorial(false);
+            setState((s) => (s ? { ...s, tutorialDone: true } : s));
+            if (plant) {
+              const first =
+                state.plots.find((p) => p.unlocked && !p.plant) ??
+                state.plots.find((p) => p.unlocked) ??
+                null;
+              if (first && !first.plant) {
+                setSelected(first.idx);
+                bridge.select(first.idx);
+                setSeedFor(first);
+                return;
+              }
+            }
+            showToast(welcomeMessage(state), 7000);
+          }}
         />
       )}
 

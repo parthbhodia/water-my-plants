@@ -32,6 +32,12 @@ const POND_Y = 468;
 const POND_RX = 190;
 const POND_RY = 58;
 const FEET_Y = 548;
+// The gardener may roam the grass between the fence and the front hedge.
+const WALK_TOP = 432;
+const WALK_BOTTOM = 588;
+// Depth band for anything standing in the yard: sorting by y makes the
+// gardener pass behind far plants and in front of near ones.
+const YARD = 100;
 const HX = 152; // house anchor
 
 /** Plot positions. `kind` mirrors the database's plot_kind(idx) exactly. */
@@ -134,11 +140,13 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private streakG!: Phaser.GameObjects.Graphics;
   private burstRipples: Array<{ t0: number }> = [];
 
-  private autoTarget: number | null = null;
+  private autoTarget: { x: number; y: number } | null = null;
   private pendingPour = false;
   private pendingAction: TendAction = "water";
   private pendingPlot = 0;
   private celebrating = false;
+  /** Set while a modal (e.g. the tutorial) owns the screen. */
+  private frozen = false;
   private pipG!: Phaser.GameObjects.Graphics;
   private pouring = false;
   private nearPond = false;
@@ -169,9 +177,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     const kb = this.input.keyboard;
     if (kb) {
       this.cursors = kb.createCursorKeys();
-      this.keys = kb.addKeys("A,D,E,SPACE") as Record<string, Phaser.Input.Keyboard.Key>;
+      this.keys = kb.addKeys("W,A,S,D,E,SPACE") as Record<string, Phaser.Input.Keyboard.Key>;
     }
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      if (this.frozen) return;
       let best = -1;
       let bestD = 78 * 78;
       PLOTS.forEach((pl, i) => {
@@ -183,7 +192,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         this.selectPlot(best);
         this.bridge.onPlotTapped?.(best);
       } else {
-        this.autoTarget = Phaser.Math.Clamp(p.worldX, 40, W - 40);
+        this.autoTarget = this.walkable(p.worldX, p.worldY);
         this.pendingPour = false;
       }
     });
@@ -197,8 +206,8 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       }) as EventListener);
     }
 
-    this.streakG = this.add.graphics().setDepth(14.5);
-    this.pipG = this.add.graphics().setDepth(11.8);
+    this.streakG = this.add.graphics().setDepth(800);
+    this.pipG = this.add.graphics().setDepth(950);
     const nextGust = () => {
       this.launchGust();
       this.time.delayedCall(Phaser.Math.Between(5000, 11000), nextGust);
@@ -244,22 +253,30 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.refreshMarkers();
   }
 
+  /** Freezes walking and taps while React shows a full-screen panel. */
+  setFrozen(v: boolean) {
+    this.frozen = v;
+    if (v) {
+      this.autoTarget = null;
+      this.pendingPour = false;
+      if (this.isWalking()) this.player?.play("idle");
+    }
+  }
+
   /** Walk to a plot, then perform the action there. */
   requestTend(plotIdx: number, action: TendAction) {
-    if (this.pouring || this.celebrating) return;
+    if (this.pouring || this.celebrating || this.frozen) return;
     if (!this.plotUnlocked(plotIdx)) return;
     this.selected = plotIdx;
     this.pendingAction = action;
     this.refreshMarkers();
 
-    const p = PLOTS[plotIdx];
-    const side = p.x > W / 2 ? -1 : 1;
-    const standX = Phaser.Math.Clamp(p.x + side * 62, 40, W - 40);
-    if (Math.abs(this.player.x - standX) < 10) {
-      this.player.x = standX;
+    const stand = this.standPointFor(plotIdx);
+    if (Math.hypot(this.player.x - stand.x, this.player.y - stand.y) < 12) {
+      this.player.setPosition(stand.x, stand.y);
       this.startPour();
     } else {
-      this.autoTarget = standX;
+      this.autoTarget = stand;
       this.pendingPour = true;
     }
   }
@@ -878,8 +895,8 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       },
     });
 
-    this.duskOverlay = this.add.rectangle(W / 2, H / 2, W, H, 0xff8a5c, 0).setDepth(59).setBlendMode(Phaser.BlendModes.SCREEN);
-    this.nightOverlay = this.add.rectangle(W / 2, H / 2, W, H, 0x101d3f, 0).setDepth(60);
+    this.duskOverlay = this.add.rectangle(W / 2, H / 2, W, H, 0xff8a5c, 0).setDepth(989).setBlendMode(Phaser.BlendModes.SCREEN);
+    this.nightOverlay = this.add.rectangle(W / 2, H / 2, W, H, 0x101d3f, 0).setDepth(990);
   }
 
   private buildScenery() {
@@ -966,7 +983,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         .image(x, y, "blade_" + (i % 3))
         .setOrigin(0.5, 1)
         .setScale(Phaser.Math.FloatBetween(0.42, 0.7))
-        .setDepth(15 + (y - 592) / 100);
+        .setDepth(YARD + y);
       this.addSwayer(g, 9, 0, 1);
     }
   }
@@ -1120,7 +1137,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
               .image(pl.x, pl.y + 4, pl.kind === "sun" ? "bed_sun" : "bed_shade")
               .setOrigin(0.5, 0.6)
               .setScale(0.5)
-              .setDepth(9 + pl.y / 1000)
+              .setDepth(YARD + pl.y - 0.8)
               .setVisible(false);
 
       const tex = this.textures.createCanvas("plant_" + i, PB_W * 2, PB_H * 2)!;
@@ -1128,14 +1145,14 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         .image(pl.x, pl.y, "plant_" + i)
         .setScale(0.5)
         .setOrigin(PB_X / PB_W, PB_Y / PB_H)
-        .setDepth(10 + pl.y / 1000)
+        .setDepth(YARD + pl.y)
         .setVisible(false);
 
       // selection ring + status marker
-      const marker = this.add.graphics().setDepth(9.4 + pl.y / 1000);
+      const marker = this.add.graphics().setDepth(YARD + pl.y - 0.5);
 
       // padlock for plots that are not unlocked yet
-      const lock = this.add.container(pl.x, pl.y - 6).setDepth(10.6 + pl.y / 1000);
+      const lock = this.add.container(pl.x, pl.y - 6).setDepth(YARD + pl.y + 0.2);
       const lg2 = this.add.graphics();
       lg2.fillStyle(0x1f3d2d, 0.22);
       lg2.fillRoundedRect(-15, -12, 30, 24, 6);
@@ -1159,7 +1176,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         .setOrigin(0.5, 0.78)
         .setScale(0.5)
         // behind the plots when by the fence, in front of everything when near
-        .setDepth(slot.back ? 6.6 : 15.6)
+        .setDepth(slot.back ? 6.6 : YARD + slot.y)
         .setVisible(false);
       this.decorNodes.push({ tex, img });
     });
@@ -1213,10 +1230,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     if (!this.plotUnlocked(i)) return;
     this.selected = i;
     this.refreshMarkers();
-    const p = PLOTS[i];
-    // stand beside the plot, on whichever side keeps the gardener in frame
-    const side = p.x > W / 2 ? -1 : 1;
-    this.autoTarget = Phaser.Math.Clamp(p.x + side * 62, 40, W - 40);
+    this.autoTarget = this.standPointFor(i);
   }
 
   /** Repaints one plot's plant into its own canvas texture. */
@@ -1317,12 +1331,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   }
 
   private buildGardener() {
-    this.playerShadow = this.add.image(200, FEET_Y + 2, "shadow").setScale(0.62, 0.42).setAlpha(0.4).setDepth(11.9);
+    this.playerShadow = this.add.image(200, FEET_Y + 2, "shadow").setAlpha(0.4);
     this.player = this.add
       .sprite(200, FEET_Y, "g_idle_0")
       .setScale(0.5)
-      .setOrigin(BODY_CX / FRAME_W, FEET_LY / FRAME_H)
-      .setDepth(12);
+      .setOrigin(BODY_CX / FRAME_W, FEET_LY / FRAME_H);
     this.player.play("idle");
 
     this.time.addEvent({
@@ -1377,7 +1390,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     for (let i = 0; i < 7; i++) {
       const s = this.add
         .image(Phaser.Math.Between(60, W - 60), Phaser.Math.Between(400, 570), "glow")
-        .setDepth(61)
+        .setDepth(985)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setAlpha(0);
       this.fireflies.push({ s, a: Math.random() * Math.PI * 2, seed: Math.random() * 100 });
@@ -1394,7 +1407,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       rotate: { min: 0, max: 180 },
       tint: [0xffd76e, 0xfff2bf, 0xaef0c0, 0xf7a8c4],
       emitting: false,
-    }).setDepth(70);
+    }).setDepth(960);
 
     this.confetti = this.add.particles(0, 0, "petalbit", {
       speed: { min: 60, max: 240 },
@@ -1406,7 +1419,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       rotate: { min: 0, max: 360 },
       tint: [0xf7a8c4, 0xee7fa9, 0xffd76e, 0x8ed69b, 0xa5dcf2],
       emitting: false,
-    }).setDepth(70);
+    }).setDepth(960);
 
     // One emitter per facing direction: the stream must arc *toward* the pond,
     // so speedX is mirrored rather than always-positive.
@@ -1421,13 +1434,13 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       alpha: { start: 0.95, end: 0.3 },
       emitting: false,
     });
-    this.dropletsR = this.add.particles(0, 0, "drop", dropletCfg(1)).setDepth(14);
-    this.dropletsL = this.add.particles(0, 0, "drop", dropletCfg(-1)).setDepth(14);
+    this.dropletsR = this.add.particles(0, 0, "drop", dropletCfg(1)).setDepth(955);
+    this.dropletsL = this.add.particles(0, 0, "drop", dropletCfg(-1)).setDepth(955);
     this.splashG = this.add.graphics().setDepth(9.5);
   }
 
   private buildPost() {
-    this.add.image(W / 2, H / 2, "vignette").setDisplaySize(W, H).setDepth(65);
+    this.add.image(W / 2, H / 2, "vignette").setDisplaySize(W, H).setDepth(1000);
   }
 
   // ================= behaviors =================
@@ -1436,48 +1449,106 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     return this.player.anims.currentAnim?.key === "walk" && this.player.anims.isPlaying;
   }
 
+  /** Clamps a point into the grass and out of the pond. */
+  private walkable(x: number, y: number): { x: number; y: number } {
+    let nx = Phaser.Math.Clamp(x, 34, W - 34);
+    let ny = Phaser.Math.Clamp(y, WALK_TOP, WALK_BOTTOM);
+
+    // the gardener does not paddle: push out of the pond along its normal
+    const rx = POND_RX * 0.9;
+    const ry = POND_RY * 0.82;
+    const dx = (nx - POND_X) / rx;
+    const dy = (ny - POND_Y) / ry;
+    const d = Math.hypot(dx, dy);
+    if (d < 1 && d > 0.0001) {
+      nx = POND_X + (dx / d) * rx;
+      ny = Phaser.Math.Clamp(POND_Y + (dy / d) * ry, WALK_TOP, WALK_BOTTOM);
+    }
+    // the y clamp above can put him back in the water, so finish the job
+    // sideways along whichever bank he is nearest
+    const row = (ny - POND_Y) / ry;
+    if (Math.abs(row) < 1) {
+      const half = rx * Math.sqrt(1 - row * row);
+      const off = nx - POND_X;
+      if (Math.abs(off) < half) nx = POND_X + (off >= 0 ? half : -half);
+    }
+    return { x: Phaser.Math.Clamp(nx, 34, W - 34), y: ny };
+  }
+
+  /** Where to stand to reach a plot: at the near bank for pond plots. */
+  private standPointFor(i: number): { x: number; y: number } {
+    const p = PLOTS[i] ?? PLOTS[0];
+    if (p.kind === "water") {
+      return this.walkable(p.x, POND_Y + POND_RY * 0.9 + 16);
+    }
+    return this.walkable(p.x, p.y + 36);
+  }
+
   private updatePlayer() {
-    if (!this.player || this.pouring || this.celebrating) return;
+    if (!this.player || this.pouring || this.celebrating || this.frozen) return;
 
     let vx = 0;
+    let vy = 0;
     const left = this.cursors?.left?.isDown || this.keys?.A?.isDown;
     const right = this.cursors?.right?.isDown || this.keys?.D?.isDown;
+    const up = this.cursors?.up?.isDown || this.keys?.W?.isDown;
+    const down = this.cursors?.down?.isDown || this.keys?.S?.isDown;
 
-    if (left || right) {
+    if (left || right || up || down) {
       this.autoTarget = null;
       this.pendingPour = false;
-      vx = left ? -1 : 1;
-    } else if (this.autoTarget !== null) {
-      const d = this.autoTarget - this.player.x;
-      if (Math.abs(d) < 5) {
-        this.player.x = this.autoTarget;
+      vx = (left ? -1 : 0) + (right ? 1 : 0);
+      vy = (up ? -1 : 0) + (down ? 1 : 0);
+    } else if (this.autoTarget) {
+      const dx = this.autoTarget.x - this.player.x;
+      const dy = this.autoTarget.y - this.player.y;
+      if (Math.hypot(dx, dy) < 6) {
+        this.player.setPosition(this.autoTarget.x, this.autoTarget.y);
         this.autoTarget = null;
         if (this.pendingPour) {
           this.pendingPour = false;
           this.startPour();
         }
       } else {
-        vx = Math.sign(d);
+        vx = dx;
+        vy = dy;
       }
     }
 
-    if (vx !== 0) {
+    const len = Math.hypot(vx, vy);
+    if (len > 0.0001) {
+      // normalise so diagonals are not faster, and slow vertical movement a
+      // little because the yard is drawn in perspective
       const dt = this.game.loop.delta / 1000;
-      this.player.x = Phaser.Math.Clamp(this.player.x + vx * 215 * dt, 40, W - 40);
-      this.player.setFlipX(vx < 0);
+      const speed = 215 * dt;
+      const next = this.walkable(
+        this.player.x + (vx / len) * speed,
+        this.player.y + (vy / len) * speed * 0.62
+      );
+      this.player.setPosition(next.x, next.y);
+      if (Math.abs(vx) > 0.5) this.player.setFlipX(vx < 0);
       if (!this.isWalking()) this.player.play("walk");
     } else if (this.isWalking()) {
       this.player.play("idle");
       this.player.setTexture("g_idle_0");
     }
-    this.playerShadow.setPosition(this.player.x, FEET_Y + 2);
+
+    // sort against everything else standing in the yard, and shrink slightly
+    // with distance so walking back feels like walking away
+    const t = (this.player.y - WALK_TOP) / (WALK_BOTTOM - WALK_TOP);
+    this.player.setDepth(YARD + this.player.y);
+    this.player.setScale(0.44 + t * 0.13);
+    this.playerShadow
+      .setPosition(this.player.x, this.player.y + 2)
+      .setDepth(YARD + this.player.y - 0.6)
+      .setScale((0.52 + t * 0.16), (0.34 + t * 0.11));
 
     if (this.keys && (Phaser.Input.Keyboard.JustDown(this.keys.E) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE))) {
       this.requestTend(this.selected, "water");
     }
 
     const sel = PLOTS[this.selected] ?? PLOTS[0];
-    const near = Math.abs(this.player.x - sel.x) < 110;
+    const near = Math.hypot(this.player.x - sel.x, this.player.y - sel.y) < 130;
     if (near !== this.nearPond) {
       this.nearPond = near;
       this.bridge.onNearPond?.(near);
@@ -1599,14 +1670,14 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     const heroScale = sp ? bloomScale(sp.form, 300) : 1.5;
     const heroY = 500;
 
-    const overlay = this.add.rectangle(CX, H / 2, W, H, 0x0c2b23, 0).setDepth(80);
+    const overlay = this.add.rectangle(CX, H / 2, W, H, 0x0c2b23, 0).setDepth(1200);
     const rays = this.add
       .image(CX, CY + 40, "ray")
-      .setDepth(81).setAlpha(0).setScale(1.9)
+      .setDepth(1201).setAlpha(0).setScale(1.9)
       .setBlendMode(Phaser.BlendModes.ADD);
     const glow = this.add
       .image(CX, CY + 40, "sunglow")
-      .setDepth(81).setAlpha(0).setScale(2.6)
+      .setDepth(1201).setAlpha(0).setScale(2.6)
       .setTint(0xffe0ee)
       .setBlendMode(Phaser.BlendModes.SCREEN);
 
@@ -1615,7 +1686,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       .image(plot.x, plot.y, "plant_" + i)
       .setOrigin(node.img.originX, node.img.originY)
       .setScale(0.5)
-      .setDepth(82);
+      .setDepth(1202);
     node.img.setVisible(false);
 
     const font = '"Trebuchet MS", Verdana, system-ui, sans-serif';
@@ -1624,18 +1695,18 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         fontFamily: font, fontSize: "58px", color: "#fff8fb",
         stroke: "#c9527a", strokeThickness: 9,
       })
-      .setOrigin(0.5).setDepth(83).setAlpha(0).setScale(0.6);
+      .setOrigin(0.5).setDepth(1203).setAlpha(0).setScale(0.6);
     const sub = this.add
       .text(CX, 164, sp?.name ?? "", {
         fontFamily: font, fontSize: "27px", color: "#ffffff",
         stroke: "#3e8e52", strokeThickness: 6,
       })
-      .setOrigin(0.5).setDepth(83).setAlpha(0);
+      .setOrigin(0.5).setDepth(1203).setAlpha(0);
     const foot = this.add
       .text(CX, H - 46,
         plant ? `${plant.dayNumber} days of care · +${sp?.points ?? 0} points` : "",
         { fontFamily: font, fontSize: "21px", color: "#fdf6e3" })
-      .setOrigin(0.5).setDepth(83).setAlpha(0);
+      .setOrigin(0.5).setDepth(1203).setAlpha(0);
 
     const spin = this.tweens.add({
       targets: rays, angle: 360, duration: 9000, repeat: -1,

@@ -8,12 +8,14 @@ export interface SceneApi {
   requestTend(plotIdx: number, action: TendAction): void;
   selectPlot(i: number): void;
   applyOutcome(r: TendResult): void;
+  setFrozen(v: boolean): void;
 }
 
 export class GameBridge {
   private sceneApi: SceneApi | null = null;
   private pendingState: GardenState | null = null;
   private pendingAvatar: Avatar | null = null;
+  private frozen = false;
 
   /** React sets these */
   onPourStart: ((plotIdx: number, action: TendAction) => void) | null = null;
@@ -25,6 +27,7 @@ export class GameBridge {
     this.sceneApi = api;
     if (this.pendingAvatar) api.setAvatar(this.pendingAvatar);
     if (this.pendingState) api.setGarden(this.pendingState);
+    if (this.frozen) api.setFrozen(true);
   }
 
   detach() {
@@ -51,5 +54,11 @@ export class GameBridge {
 
   applyOutcome(r: TendResult) {
     this.sceneApi?.applyOutcome(r);
+  }
+
+  /** Stops the gardener responding to keys/taps while a modal is open. */
+  setFrozen(v: boolean) {
+    this.frozen = v;
+    this.sceneApi?.setFrozen(v);
   }
 }

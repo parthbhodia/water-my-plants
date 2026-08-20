@@ -51,6 +51,7 @@ export type GardenState = {
   timezoneChangeableOn?: string;
   gardenScore: number;
   completedCount: number;
+  tutorialDone: boolean;
 };
 
 export type TendAction = "water" | "feed" | "prune";
