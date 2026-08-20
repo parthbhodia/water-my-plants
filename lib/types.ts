@@ -41,6 +41,10 @@ export type GardenState = {
   timezone: string;
   plots: PlotState[];
   unlockedSpecies: string[];
+  clientTimezone?: string;
+  timezoneMismatch?: boolean;
+  canChangeTimezone?: boolean;
+  timezoneChangeableOn?: string;
   gardenScore: number;
   completedCount: number;
 };
@@ -51,7 +55,7 @@ export type TendResult = {
   status:
     | "watered" | "fed" | "pruned"
     | "already" | "not_thirsty" | "wrong_window"
-    | "overwatered" | "not_needed" | "bloomed" | "dead" | "error";
+    | "overwatered" | "not_needed" | "bloomed" | "dead" | "too_soon" | "error";
   reason?: string;
   grew?: boolean;
   bloomedNow?: boolean;
@@ -60,6 +64,7 @@ export type TendResult = {
   species?: string;
   plotIdx?: number;
   nextDue?: string;
+  readyAt?: string;
   windowStart?: number | null;
   windowEnd?: number | null;
   state?: GardenState;

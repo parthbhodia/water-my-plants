@@ -55,6 +55,8 @@ export function tendMessage(r: TendResult): string {
       return sp?.windowStart === 18
         ? `${name} only drinks after dusk. Come back between ${hour12(r.windowStart)} and ${hour12(r.windowEnd)}. 🌙`
         : `${name} only drinks between ${hour12(r.windowStart)} and ${hour12(r.windowEnd)}. ☀️`;
+    case "too_soon":
+      return `Steady on — ${name} was watered very recently. Try again after ${r.readyAt}.`;
     case "overwatered":
       return `💀 Too much! ${name} likes dry roots — you've damaged it. Wait for it to be thirsty next time.`;
     case "not_needed":
