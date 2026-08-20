@@ -97,6 +97,8 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     lock: Phaser.GameObjects.Container;
     marker: Phaser.GameObjects.Graphics;
     zone: Phaser.GameObjects.Zone;
+    ring: Phaser.GameObjects.Graphics;
+    alert: Phaser.GameObjects.Image;
   }> = [];
   private selected = 0;
   private decorNodes: Array<{ tex: Phaser.Textures.CanvasTexture; img: Phaser.GameObjects.Image }> = [];
@@ -703,6 +705,22 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     });
 
     // ---- glossy hint droplet (2x) ----
+    // ---- distress bubble: shown over a plant on its final day (2x) ----
+    this.ctex("distress", 96, 112, (c) => {
+      c.scale(2, 2);
+      c.fillStyle = "rgba(31,20,15,0.25)";
+      ell(c, 24, 46, 10, 3); c.fill();
+      c.fillStyle = lg(c, 0, 4, 0, 40, [[0, "#ffffff"], [1, "#ffd9d0"]]);
+      ell(c, 24, 22, 19, 19); c.fill();
+      c.beginPath(); c.moveTo(18, 38); c.lineTo(24, 48); c.lineTo(30, 38); c.closePath(); c.fill();
+      c.strokeStyle = "#d9503c"; c.lineWidth = 2.5;
+      ell(c, 24, 22, 19, 19); c.stroke();
+      // the exclamation mark
+      c.fillStyle = "#d9503c";
+      rr(c, 21.4, 10, 5.2, 15, 2.6); c.fill();
+      ell(c, 24, 31.5, 3, 3); c.fill();
+    });
+
     this.ctex("hint", 44, 56, (c) => {
       c.scale(2, 2);
       c.fillStyle = "rgba(20,60,90,0.25)"; ell(c, 11, 25.5, 8, 2.4); c.fill();
@@ -1170,7 +1188,28 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
       const zone = this.add.zone(pl.x, pl.y - 20, 76, 86).setDepth(30);
 
-      this.plotNodes.push({ tex, img, bed, lock, marker, zone });
+      // final-day distress: a pulsing ring on the ground, a big bubble above
+      const ring = this.add.graphics().setDepth(YARD + pl.y - 0.4).setVisible(false);
+      ring.lineStyle(4, 0xd9503c, 0.75);
+      ring.strokeEllipse(pl.x, pl.y + 3, 78, 30);
+      ring.lineStyle(2, 0xffb4a4, 0.5);
+      ring.strokeEllipse(pl.x, pl.y + 3, 62, 24);
+      this.tweens.add({
+        targets: ring, alpha: { from: 0.95, to: 0.25 },
+        scaleX: 1.06, scaleY: 1.06,
+        duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
+      });
+      const alert = this.add
+        .image(pl.x, pl.y - 118, "distress")
+        .setScale(0.5)
+        .setDepth(YARD + pl.y + 6)
+        .setVisible(false);
+      this.tweens.add({
+        targets: alert, y: pl.y - 128, scale: 0.56,
+        duration: 620, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
+      });
+
+      this.plotNodes.push({ tex, img, bed, lock, marker, zone, ring, alert });
     });
   }
 
@@ -1251,6 +1290,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     node.lock.setVisible(!unlocked && i === (this.garden?.plotCount ?? 0));
 
     const plant = st?.plant ?? null;
+    const lastDay = !!plant && !plant.dead && !plant.isBloomed && plant.overdueDays >= 3;
+    node.ring.setVisible(lastDay);
+    node.alert.setVisible(lastDay);
     if (!plant) {
       node.img.setVisible(false);
       return;
@@ -1267,6 +1309,20 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     c.restore();
     node.tex.refresh();
     node.img.setVisible(true);
+
+    // a last-day plant trembles; anything healthier stands still
+    const shiverKey = "shiver" + i;
+    const existing = this.tweens.getTweensOf(node.img).find((t) => t.data && (t as unknown as { shiverKey?: string }).shiverKey === shiverKey);
+    if (lastDay && !existing) {
+      const tw = this.tweens.add({
+        targets: node.img, angle: { from: -1.6, to: 1.6 },
+        duration: 260, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
+      });
+      (tw as unknown as { shiverKey?: string }).shiverKey = shiverKey;
+    } else if (!lastDay) {
+      this.tweens.getTweensOf(node.img).forEach((t) => t.remove());
+      node.img.setAngle(0);
+    }
   }
 
   private refreshMarkers() {

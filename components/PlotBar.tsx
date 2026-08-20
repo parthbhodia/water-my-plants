@@ -2,7 +2,7 @@
 
 import {
   Sun, CloudSun, Waves, Droplets, Nut, Scissors, FlaskConical,
-  Flower2, Sprout, Skull, Plus, Clock,
+  Flower2, Sprout, Skull, Plus, Clock, CircleAlert,
 } from "lucide-react";
 import type { GardenState, PlotState, TendAction } from "@/lib/types";
 import { SPECIES_BY_KEY, windowOpen, PLOT_LABEL } from "@/lib/species";
@@ -57,10 +57,12 @@ export default function PlotBar({
         {plots.map((p) => {
           const pl = p.plant;
           const psp = pl ? SPECIES_BY_KEY[pl.species] : null;
+          const lastDay = !!pl && !pl.dead && !pl.isBloomed && pl.overdueDays >= 3;
           const chipState = !pl
             ? "empty"
             : pl.dead ? "dead"
             : pl.isBloomed ? "bloom"
+            : lastDay ? "dying"
             : pl.thirsty ? "thirsty"
             : "ok";
           const Kind = KIND_ICON[p.kind];
@@ -76,6 +78,7 @@ export default function PlotBar({
                 <span className="chip-badge" aria-hidden>
                   {pl.dead ? <Skull size={12} /> :
                    pl.isBloomed ? <Flower2 size={12} /> :
+                   lastDay ? <CircleAlert size={12} /> :
                    pl.thirsty ? <Droplets size={12} /> : <Clock size={12} />}
                 </span>
               )}
@@ -107,7 +110,9 @@ export default function PlotBar({
                   ) : (
                     <>
                       Day {plant.dayNumber} · stage {plant.stage + 1} of 7
-                      {plant.wilted
+                      {plant.overdueDays >= 3
+                        ? " · last chance — she dies tonight!"
+                        : plant.wilted
                         ? ` · wilting, ${plant.overdueDays}d late`
                         : plant.thirsty
                         ? " · thirsty now"
