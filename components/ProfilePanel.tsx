@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { type Avatar, SKINS, HAIRS, HATS, OUTFITS } from "@/game/avatar";
+import { type Avatar, SKINS, HAIRS, HAIRDOS, HATS, OUTFITS } from "@/game/avatar";
+import { Dices, Check, Trophy, Droplets, Flower2 } from "lucide-react";
 import type { GardenState } from "@/lib/types";
 import AvatarPreview from "./AvatarPreview";
 
@@ -10,7 +11,7 @@ type Row = { key: keyof Avatar; label: string; swatches: Array<{ name: string; a
 
 const ROWS: Row[] = [
   { key: "skin", label: "Skin", swatches: SKINS.map((s) => ({ name: s.name, a: s.hi, b: s.lo })) },
-  { key: "hair", label: "Hair", swatches: HAIRS.map((h) => ({ name: h.name, a: h.hi, b: h.lo })) },
+  { key: "hair", label: "Hair colour", swatches: HAIRS.map((h) => ({ name: h.name, a: h.hi, b: h.lo })) },
   { key: "hat", label: "Headwear", swatches: HATS.map((h) => ({ name: h.name, a: h.a || "#e6e2d6", b: h.c || "#b9b3a2" })) },
   { key: "outfit", label: "Outfit", swatches: OUTFITS.map((o) => ({ name: o.name, a: o.shirtMid, b: o.ovMid })) },
 ];
@@ -46,6 +47,7 @@ export default function ProfilePanel({
     const next: Avatar = {
       skin: Math.floor(Math.random() * SKINS.length),
       hair: Math.floor(Math.random() * HAIRS.length),
+      hairdo: Math.floor(Math.random() * HAIRDOS.length),
       hat: Math.floor(Math.random() * HATS.length),
       outfit: Math.floor(Math.random() * OUTFITS.length),
     };
@@ -79,9 +81,9 @@ export default function ProfilePanel({
           <h3>{state.displayName ?? "Gardener"}</h3>
           <div className="fact-row">
             <span className="fact"><b>Lv {state.level}</b> gardener</span>
-            <span className="fact">💧 {state.dewdrops}</span>
-            <span className="fact">🏆 {state.gardenScore}</span>
-            <span className="fact">🌸 {state.completedCount} harvested</span>
+            <span className="fact"><Droplets size={15} strokeWidth={2.5} aria-hidden /> <b>{state.dewdrops}</b> dewdrops</span>
+            <span className="fact"><Trophy size={15} strokeWidth={2.5} aria-hidden /> <b>{state.gardenScore}</b> score</span>
+            <span className="fact"><Flower2 size={15} strokeWidth={2.5} aria-hidden /> <b>{state.completedCount}</b> harvested</span>
           </div>
           <p className="profile-meta">
             Friend code <code>{state.friendCode}</code> · {state.timezone}
@@ -107,11 +109,25 @@ export default function ProfilePanel({
       </div>
 
       <div className="studio-options">
+        <div className="opt-row">
+          <div className="opt-label">Hairstyle</div>
+          <div className="swatch-row">
+            {HAIRDOS.map((h, i) => (
+              <button
+                key={h.name}
+                className={`style-chip ${draft.hairdo === i ? "sel" : ""}`}
+                onClick={() => set("hairdo", i)}
+              >
+                {h.name}
+              </button>
+            ))}
+          </div>
+        </div>
         {ROWS.map((row) => (
           <div key={row.key} className="opt-row">
             <div className="opt-label">
               {row.label}
-              <span className="opt-name">{row.swatches[draft[row.key]]?.name ?? ""}</span>
+              <span className="opt-name">— {row.swatches[draft[row.key]]?.name ?? ""}</span>
             </div>
             <div className="swatch-row">
               {row.swatches.map((s, i) => (
@@ -130,9 +146,9 @@ export default function ProfilePanel({
       </div>
 
       <div className="profile-actions">
-        <button className="btn ghost small" onClick={randomize}>🎲 Surprise me</button>
+        <button className="btn ghost small" onClick={randomize}><Dices size={15} strokeWidth={2.4} aria-hidden /> Surprise me</button>
         <button className="btn small" onClick={save} disabled={!dirty || saving}>
-          {saving ? "…" : dirty ? "✓ Save gardener" : "Saved"}
+          {saving ? "…" : dirty ? <><Check size={15} strokeWidth={2.8} aria-hidden /> Save gardener</> : "Saved"}
         </button>
       </div>
     </div>

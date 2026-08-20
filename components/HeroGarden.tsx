@@ -134,7 +134,7 @@ export default function HeroGarden() {
       phase.current = "pouring";
       pourAt.current = performance.now();
       setMood("cheer");
-      setBubble("There you go, love. Come back tomorrow and she'll be taller still.");
+      setBubble("There you go, love. One drink a day, and she'll be taller tomorrow.");
     } else if (phase.current === "grown") {
       phase.current = "done";
       setMood("happy");

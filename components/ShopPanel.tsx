@@ -5,12 +5,19 @@ import { createClient } from "@/utils/supabase/client";
 import type { GardenState, ShopItem, ShopState } from "@/lib/types";
 import { SPECIES_BY_KEY, careSummary } from "@/lib/species";
 import PlantIcon from "./PlantIcon";
+import { Droplets, Nut, Scissors, FlaskConical, Gift, Check, Store } from "lucide-react";
 
-const ITEM_ART: Record<string, string> = {
-  fertilizer: "🌰",
-  shears: "✂️",
-  tonic: "🧪",
+const ITEM_ART = { fertilizer: Nut, shears: Scissors, tonic: FlaskConical } as const;
+
+/** Why this item is worth saving for — shown while it's out of reach. */
+const ITEM_WHY: Record<string, string> = {
+  fertilizer: "Needed to feed the Tomato and the Ghost Orchid.",
+  shears: "Needed to prune the Bonsai Pine. Bought once, kept forever.",
+  tonic: "Undoes a death. The best insurance in the shed.",
 };
+
+/** Rough dewdrops a day of honest tending brings in. */
+const DEW_PER_DAY = 25;
 
 export default function ShopPanel({
   state,
@@ -43,7 +50,7 @@ export default function ShopPanel({
     }
     const res = data as { name: string; spent: number; state: GardenState };
     onBought(res.state);
-    showToast(`Bought ${res.name} for ${res.spent} 💧`);
+    showToast(`${res.name} is yours — ${res.spent} dewdrops well spent. 🌿`);
     void load();
   };
 
@@ -57,8 +64,8 @@ export default function ShopPanel({
   return (
     <div className="shop">
       <div className="shop-head">
-        <h3>🛒 Potting Shed</h3>
-        <span className="purse">💧 {shop.dewdrops} dewdrops</span>
+        <h3><Store size={18} strokeWidth={2.4} aria-hidden /> Potting Shed</h3>
+        <span className="purse"><Droplets size={15} strokeWidth={2.5} aria-hidden /> {shop.dewdrops} dewdrops</span>
       </div>
       <p className="shop-note">
         Everything here is bought with dewdrops you earned by tending. There is nothing to
@@ -75,26 +82,45 @@ export default function ShopPanel({
               return (
                 <div key={item.key} className={`shop-card ${maxed ? "owned" : ""}`}>
                   <div className="shop-art">
-                    {sp ? <PlantIcon species={sp} stage={6} size={50} />
-                        : <span className="shop-emoji">{ITEM_ART[item.key] ?? "🎁"}</span>}
+                    {sp ? (
+                      <PlantIcon species={sp} stage={6} size={50} />
+                    ) : (
+                      (() => {
+                        const I = ITEM_ART[item.key as keyof typeof ITEM_ART] ?? Gift;
+                        return <I size={30} strokeWidth={1.8} className="shop-item-icon" aria-hidden />;
+                      })()
+                    )}
                   </div>
                   <h5>{item.name}</h5>
                   {sp && <p className="seed-care">{careSummary(sp)}</p>}
                   <p className="shop-blurb">{item.blurb}</p>
+                  {!maxed && !item.affordable && (
+                    <div className="shop-progress">
+                      <div className="sp-bar">
+                        <div style={{ width: `${Math.min(100, (shop.dewdrops / item.cost) * 100)}%` }} />
+                      </div>
+                      <span className="sp-note">
+                        {item.cost - shop.dewdrops} to go — about{" "}
+                        {Math.max(1, Math.ceil((item.cost - shop.dewdrops) / DEW_PER_DAY))} day
+                        {Math.ceil((item.cost - shop.dewdrops) / DEW_PER_DAY) === 1 ? "" : "s"} of tending
+                      </span>
+                      {ITEM_WHY[item.key] && <span className="sp-why">{ITEM_WHY[item.key]}</span>}
+                    </div>
+                  )}
                   <div className="shop-foot">
                     {maxed ? (
                       <span className="shop-owned">
-                        {item.kind === "species" ? "✓ Unlocked" : "✓ Owned"}
+                        <Check size={14} strokeWidth={3} aria-hidden /> {item.kind === "species" ? "Unlocked" : "Owned"}
                       </span>
                     ) : (
                       <>
-                        <span className="shop-cost">💧 {item.cost}</span>
+                        <span className="shop-cost"><Droplets size={13} strokeWidth={2.6} aria-hidden /> {item.cost}</span>
                         <button
-                          className="btn small"
+                          className={`btn small${item.affordable ? "" : " dim"}`}
                           disabled={!item.affordable || busy === item.key}
                           onClick={() => buy(item)}
                         >
-                          {busy === item.key ? "…" : item.affordable ? "Buy" : "Too pricey"}
+                          {busy === item.key ? "…" : item.affordable ? "Buy" : "Saving up"}
                         </button>
                       </>
                     )}

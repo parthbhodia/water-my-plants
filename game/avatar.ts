@@ -6,9 +6,9 @@
 
 import { type Ctx, lg, rgrad, rr, ell } from "./draw";
 
-export type Avatar = { skin: number; hair: number; hat: number; outfit: number };
+export type Avatar = { skin: number; hair: number; hairdo: number; hat: number; outfit: number };
 
-export const DEFAULT_AVATAR: Avatar = { skin: 0, hair: 0, hat: 0, outfit: 0 };
+export const DEFAULT_AVATAR: Avatar = { skin: 0, hair: 0, hairdo: 0, hat: 0, outfit: 0 };
 
 export type Skin = { name: string; hi: string; mid: string; lo: string; blush: string };
 export const SKINS: Skin[] = [
@@ -18,6 +18,14 @@ export const SKINS: Skin[] = [
   { name: "Olive",     hi: "#e2b785", mid: "#c9975f", lo: "#a87844", blush: "rgba(200,105,95,0.45)" },
   { name: "Brown",     hi: "#c08a5a", mid: "#a06a40", lo: "#7f5030", blush: "rgba(170,85,75,0.4)" },
   { name: "Deep",      hi: "#8b5c39", mid: "#6d4526", lo: "#52321b", blush: "rgba(150,70,60,0.35)" },
+];
+
+export type Hairdo = { name: string };
+export const HAIRDOS: Hairdo[] = [
+  { name: "Cropped" },
+  { name: "Long" },
+  { name: "Ponytail" },
+  { name: "Buns" },
 ];
 
 export type Hair = { name: string; hi: string; lo: string };
@@ -60,7 +68,7 @@ export const HATS: HatStyle[] = [
   { name: "Cozy beanie",  kind: "beanie", a: "#7fbfd6", b: "#4f97b5", c: "#f2f6f8" },
 ];
 
-export const PALETTES = { SKINS, HAIRS, HATS, OUTFITS };
+export const PALETTES = { SKINS, HAIRS, HAIRDOS, HATS, OUTFITS };
 
 /** Clamp arbitrary input (e.g. from the DB) to a renderable avatar. */
 export function safeAvatar(a: Partial<Avatar> | null | undefined): Avatar {
@@ -69,6 +77,7 @@ export function safeAvatar(a: Partial<Avatar> | null | undefined): Avatar {
   return {
     skin: pick(a?.skin, SKINS.length),
     hair: pick(a?.hair, HAIRS.length),
+    hairdo: pick((a as Partial<Avatar> | null | undefined)?.hairdo, HAIRDOS.length),
     hat: pick(a?.hat, HATS.length),
     outfit: pick(a?.outfit, OUTFITS.length),
   };
@@ -184,8 +193,43 @@ export function paintGardener(c: Ctx, p: Pose, av: Avatar) {
   }
 
   // ---- hair (behind the face) ----
+  const hairdo = HAIRDOS[(av as Avatar).hairdo ?? 0] ? ((av as Avatar).hairdo ?? 0) : 0;
   c.fillStyle = rgrad(c, cx - 5, 16, 22, [[0, hair.hi], [1, hair.lo]]);
   ell(c, cx, 22, 15.5, 15.5); c.fill();
+
+  if (hairdo === 1) {
+    // long: soft falls down both shoulders
+    c.fillStyle = lg(c, 0, 20, 0, 52, [[0, hair.hi], [1, hair.lo]]);
+    c.beginPath();
+    c.moveTo(cx - 15, 18);
+    c.quadraticCurveTo(cx - 20, 34, cx - 17, 50);
+    c.quadraticCurveTo(cx - 12, 53, cx - 9, 49);
+    c.quadraticCurveTo(cx - 13, 34, cx - 11, 22);
+    c.closePath(); c.fill();
+    c.beginPath();
+    c.moveTo(cx + 15, 18);
+    c.quadraticCurveTo(cx + 20, 34, cx + 17, 50);
+    c.quadraticCurveTo(cx + 12, 53, cx + 9, 49);
+    c.quadraticCurveTo(cx + 13, 34, cx + 11, 22);
+    c.closePath(); c.fill();
+  } else if (hairdo === 2) {
+    // ponytail swinging off to one side
+    c.fillStyle = lg(c, 0, 14, 0, 46, [[0, hair.hi], [1, hair.lo]]);
+    c.beginPath();
+    c.moveTo(cx + 12, 14);
+    c.quadraticCurveTo(cx + 24, 20, cx + 21, 42);
+    c.quadraticCurveTo(cx + 18, 46, cx + 15, 42);
+    c.quadraticCurveTo(cx + 16, 26, cx + 8, 16);
+    c.closePath(); c.fill();
+    c.fillStyle = hair.lo;
+    ell(c, cx + 11, 15, 3, 3); c.fill();
+  } else if (hairdo === 3) {
+    // two round buns above the ears
+    c.fillStyle = rgrad(c, cx - 14, 10, 8, [[0, hair.hi], [1, hair.lo]]);
+    ell(c, cx - 13, 12, 5.5, 5.5); c.fill();
+    c.fillStyle = rgrad(c, cx + 12, 10, 8, [[0, hair.hi], [1, hair.lo]]);
+    ell(c, cx + 13, 12, 5.5, 5.5); c.fill();
+  }
   if (hat.kind === "none" || hat.kind === "crown") {
     // fuller hair so an uncovered head doesn't read as bald
     c.fillStyle = hair.lo;

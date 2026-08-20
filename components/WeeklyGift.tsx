@@ -55,7 +55,7 @@ export default function WeeklyGift({
     setGift({ ...gift, claimed: true });
     if (r.state) onState(r.state);
     sfx.grow();
-    showToast("Take it, dear — you earn the rest yourself. See you next week. 🧺", 6500, "cheer");
+    showToast("Take it, dear — you earn the rest yourself. Now stay a moment; the garden is lovely today. 🧺", 6500, "cheer");
   };
 
   return (

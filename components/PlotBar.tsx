@@ -111,7 +111,7 @@ export default function PlotBar({
                         ? ` · wilting, ${plant.overdueDays}d late`
                         : plant.thirsty
                         ? " · thirsty now"
-                        : " · watered — come back tomorrow"}
+                        : " · watered for today ✓"}
                       {sp.feedsRequired ? ` · fed ${plant.feedsDone}/${sp.feedsRequired}` : ""}
                       {sp.prunesRequired ? ` · pruned ${plant.prunesDone}/${sp.prunesRequired}` : ""}
                     </>

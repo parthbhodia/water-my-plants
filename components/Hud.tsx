@@ -15,6 +15,7 @@ export default function Hud({
   onToggleMute,
   onToggleMusic,
   musicOn,
+  musicName,
   onSignOut,
 }: {
   state: GardenState;
@@ -26,6 +27,7 @@ export default function Hud({
   onToggleMute: () => void;
   onToggleMusic: () => void;
   musicOn: boolean;
+  musicName: string;
   onSignOut: () => void;
 }) {
   const live = state.plots.filter((p) => p.plant && !p.plant.dead).length;
@@ -56,7 +58,7 @@ export default function Hud({
         <button
           className="hud-icon-btn"
           onClick={onToggleMusic}
-          title={musicOn ? "Music off" : "Music on"}
+          title={musicOn ? `Playing "${musicName}" — press for the next record` : "Put a record on"}
           style={musicOn ? undefined : { opacity: 0.55 }}
         >
           {musicOn ? <Music size={19} strokeWidth={2.2} aria-hidden /> : <Music2 size={19} strokeWidth={2.2} aria-hidden />}

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 import { GameBridge } from "@/game/bridge";
-import { sfx, music } from "@/game/audio";
+import { sfx, music, MUSIC_MODES, type MusicMode } from "@/game/audio";
 import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
 import type { CompletedLily, GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
 import { welcomeMessage, welcomeMood, tendMessage, tendMood } from "@/lib/messages";
@@ -40,6 +40,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [completed, setCompleted] = useState<CompletedLily[] | null>(null);
   const [muted, setMuted] = useState(false);
   const [musicOn, setMusicOn] = useState(true);
+  const [musicMode, setMusicMode] = useState<MusicMode>("meadow");
   const [avatar, setAvatar] = useState<Avatar>(DEFAULT_AVATAR);
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -69,6 +70,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     music.init();
     setMuted(sfx.muted);
     setMusicOn(music.on);
+    setMusicMode(music.mode);
     const kick = () => music.start();
     window.addEventListener("pointerdown", kick, { once: true });
     return () => window.removeEventListener("pointerdown", kick);
@@ -128,7 +130,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           } else {
             sfx.wiggle();
           }
-          showToast(tendMessage(result), 5600, tendMood(result));
+          showToast(tendMessage(result, state?.displayName), 5600, tendMood(result));
           acting.current = false;
           setBusy(false);
         }, 850);
@@ -256,12 +258,28 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     else { sfx.click(); music.start(); }
   }, []);
 
-  const toggleMusic = useCallback(() => {
-    const next = !music.on;
-    music.setOn(next);
-    setMusicOn(next);
+  // one button, four states: each press moves to the next record, then off
+  const cycleMusic = useCallback(() => {
     sfx.click();
-  }, []);
+    if (!music.on) {
+      music.setMode(MUSIC_MODES[0].key);
+      setMusicOn(true);
+      setMusicMode(MUSIC_MODES[0].key);
+      showToast(`Granny put on "${MUSIC_MODES[0].name}". 🎶`, 3500, "happy");
+      return;
+    }
+    const i = MUSIC_MODES.findIndex((m) => m.key === music.mode);
+    if (i < MUSIC_MODES.length - 1) {
+      const next = MUSIC_MODES[i + 1];
+      music.setMode(next.key);
+      setMusicMode(next.key);
+      showToast(`Granny put on "${next.name}". 🎶`, 3500, "happy");
+    } else {
+      music.setOn(false);
+      setMusicOn(false);
+      showToast("Granny lifted the needle — just the garden now.", 3500, "sleepy");
+    }
+  }, [showToast]);
 
   const needCare = state
     ? state.plots.filter(
@@ -297,8 +315,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             onLeague={() => { sfx.click(); setTab("league"); }}
             onHelp={() => { sfx.click(); setTutorial(true); }}
             onToggleMute={toggleMute}
-            onToggleMusic={toggleMusic}
+            onToggleMusic={cycleMusic}
             musicOn={musicOn}
+            musicName={MUSIC_MODES.find((m) => m.key === musicMode)?.name ?? ""}
             onSignOut={signOut}
           />
         )}
