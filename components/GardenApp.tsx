@@ -16,6 +16,7 @@ import Leaderboard from "./Leaderboard";
 import ShopPanel from "./ShopPanel";
 import ProfilePanel from "./ProfilePanel";
 import TabBar, { type PanelTab } from "./TabBar";
+import TodayBrief from "./TodayBrief";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
 
@@ -33,6 +34,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [avatar, setAvatar] = useState<Avatar>(DEFAULT_AVATAR);
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [briefKey, setBriefKey] = useState(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acting = useRef(false);
 
@@ -46,6 +48,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     (s: GardenState) => {
       setState(s);
       bridge.setGarden(s);
+      setBriefKey((k) => k + 1);
     },
     [bridge]
   );
@@ -281,6 +284,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             badge={{ garden: needCare }}
           />
           <div className="panel-body">
+            {tab === "garden" && <TodayBrief refreshKey={briefKey} />}
             {tab === "garden" && (
               <PlotBar
                 state={state}

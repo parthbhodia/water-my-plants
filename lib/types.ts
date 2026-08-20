@@ -148,3 +148,9 @@ export type ShopItem = {
 };
 
 export type ShopState = { dewdrops: number; items: ShopItem[] };
+
+export type TodayBrief = {
+  need: { kind: string; count: number; title: string; body: string } | null;
+  emailEnabled: boolean;
+  nudgeHour: number;
+};
