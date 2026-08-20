@@ -14,6 +14,7 @@ export default function PlotBar({
   onTend,
   onPlant,
   onClear,
+  onRevive,
 }: {
   state: GardenState;
   selected: number;
@@ -22,6 +23,7 @@ export default function PlotBar({
   onTend: (i: number, a: TendAction) => void;
   onPlant: (p: PlotState) => void;
   onClear: (i: number) => void;
+  onRevive: (i: number) => void;
 }) {
   const plots = state.plots.filter((p) => p.unlocked);
   const cur = state.plots[selected];
@@ -106,6 +108,11 @@ export default function PlotBar({
                 </button>
               )}
             </>
+          )}
+          {plant?.dead && (state.inventory?.tonic ?? 0) > 0 && (
+            <button className="btn small" disabled={busy} onClick={() => onRevive(selected)}>
+              🧪 Revive ({state.inventory.tonic})
+            </button>
           )}
           {clearable && (
             <button className="btn pink small" disabled={busy} onClick={() => onClear(selected)}>

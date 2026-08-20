@@ -27,7 +27,7 @@ function Row({ e, unit }: { e: HofEntry; unit: string }) {
   );
 }
 
-export default function Leaderboard({ onClose }: { onClose: () => void }) {
+export default function Leaderboard() {
   const [tab, setTab] = useState<Tab>("week");
   const [league, setLeague] = useState<LeagueState | null>(null);
   const [hof, setHof] = useState<HallOfFame | null>(null);
@@ -43,13 +43,7 @@ export default function Leaderboard({ onClose }: { onClose: () => void }) {
   }, []);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="journal board" onClick={(e) => e.stopPropagation()}>
-        <div className="journal-head">
-          <h2>🏆 Standing</h2>
-          <button className="btn ghost small" onClick={onClose}>✕ close</button>
-        </div>
-
+    <div className="board-panel">
         <div className="tabs">
           <button className={tab === "week" ? "on" : ""} onClick={() => setTab("week")}>
             This week
@@ -183,7 +177,6 @@ export default function Leaderboard({ onClose }: { onClose: () => void }) {
             )}
           </>
         )}
-      </div>
     </div>
   );
 }

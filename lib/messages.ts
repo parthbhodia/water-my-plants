@@ -59,6 +59,8 @@ export function tendMessage(r: TendResult): string {
       return `Steady on — ${name} was watered very recently. Try again after ${r.readyAt}.`;
     case "overwatered":
       return `💀 Too much! ${name} likes dry roots — you've damaged it. Wait for it to be thirsty next time.`;
+    case "no_item":
+      return r.reason ?? "You are missing something for that — check the shop.";
     case "not_needed":
       return r.reason ?? "Nothing to do there.";
     case "bloomed":

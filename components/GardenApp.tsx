@@ -11,9 +11,11 @@ import { welcomeMessage, tendMessage } from "@/lib/messages";
 import Hud from "./Hud";
 import PlotBar from "./PlotBar";
 import Journal from "./Journal";
-import AvatarStudio from "./AvatarStudio";
 import SeedPicker from "./SeedPicker";
 import Leaderboard from "./Leaderboard";
+import ShopPanel from "./ShopPanel";
+import ProfilePanel from "./ProfilePanel";
+import TabBar, { type PanelTab } from "./TabBar";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
 
@@ -24,8 +26,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
-  const [studioOpen, setStudioOpen] = useState(false);
-  const [leagueOpen, setLeagueOpen] = useState(false);
+  const [tab, setTab] = useState<PanelTab>("garden");
   const [seedFor, setSeedFor] = useState<PlotState | null>(null);
   const [completed, setCompleted] = useState<CompletedLily[] | null>(null);
   const [muted, setMuted] = useState(false);
@@ -174,6 +175,20 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     [supabase, applyState, showToast, busy]
   );
 
+  const revivePlot = useCallback(
+    async (i: number) => {
+      if (busy) return;
+      setBusy(true);
+      const { data, error } = await supabase.rpc("revive_plant", { p_plot_idx: i });
+      setBusy(false);
+      if (error) { showToast(error.message); return; }
+      applyState(data as GardenState);
+      sfx.grow();
+      showToast("The tonic works — it is alive again. Keep to its schedule this time! 🧪");
+    },
+    [supabase, applyState, showToast, busy]
+  );
+
   const openJournal = useCallback(async () => {
     sfx.click();
     setJournalOpen(true);
@@ -213,6 +228,12 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     if (!next) sfx.click();
   }, []);
 
+  const needCare = state
+    ? state.plots.filter(
+        (p) => p.plant && p.plant.thirsty && !p.plant.isBloomed && !p.plant.dead
+      ).length
+    : 0;
+
   if (error) {
     return (
       <main className="garden-wrap">
@@ -235,8 +256,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             state={state}
             muted={muted}
             onJournal={openJournal}
-            onStudio={() => { sfx.click(); setStudioOpen(true); }}
-            onLeague={() => { sfx.click(); setLeagueOpen(true); }}
+            onStudio={() => { sfx.click(); setTab("profile"); }}
+            onLeague={() => { sfx.click(); setTab("league"); }}
             onToggleMute={toggleMute}
             onSignOut={signOut}
           />
@@ -253,15 +274,41 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       </div>
 
       {state && (
-        <PlotBar
-          state={state}
-          selected={selected}
-          busy={busy}
-          onSelect={selectPlot}
-          onTend={tend}
-          onPlant={(p) => { sfx.click(); setSeedFor(p); }}
-          onClear={clearPlot}
-        />
+        <div className="panel-wrap">
+          <TabBar
+            active={tab}
+            onChange={(t) => { sfx.click(); setTab(t); }}
+            badge={{ garden: needCare }}
+          />
+          <div className="panel-body">
+            {tab === "garden" && (
+              <PlotBar
+                state={state}
+                selected={selected}
+                busy={busy}
+                onSelect={selectPlot}
+                onTend={tend}
+                onPlant={(p) => { sfx.click(); setSeedFor(p); }}
+                onClear={clearPlot}
+                onRevive={revivePlot}
+              />
+            )}
+            {tab === "shop" && (
+              <ShopPanel state={state} onBought={applyState} showToast={showToast} />
+            )}
+            {tab === "profile" && (
+              <ProfilePanel
+                state={state}
+                avatar={avatar}
+                onPreview={(a) => bridge.setAvatar(a)}
+                onSave={saveAvatar}
+                onState={applyState}
+                showToast={showToast}
+              />
+            )}
+            {tab === "league" && <Leaderboard />}
+          </div>
+        </div>
       )}
 
       {seedFor && state && (
@@ -272,17 +319,6 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           busy={busy}
           onPlant={plantSeed}
           onClose={() => setSeedFor(null)}
-        />
-      )}
-
-      {leagueOpen && <Leaderboard onClose={() => setLeagueOpen(false)} />}
-
-      {studioOpen && (
-        <AvatarStudio
-          initial={avatar}
-          onPreview={(a) => bridge.setAvatar(a)}
-          onSave={saveAvatar}
-          onClose={() => setStudioOpen(false)}
         />
       )}
 

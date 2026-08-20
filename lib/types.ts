@@ -41,6 +41,9 @@ export type GardenState = {
   timezone: string;
   plots: PlotState[];
   unlockedSpecies: string[];
+  inventory: Record<string, number>;
+  level: number;
+  nameChanged: boolean;
   clientTimezone?: string;
   timezoneMismatch?: boolean;
   canChangeTimezone?: boolean;
@@ -55,7 +58,8 @@ export type TendResult = {
   status:
     | "watered" | "fed" | "pruned"
     | "already" | "not_thirsty" | "wrong_window"
-    | "overwatered" | "not_needed" | "bloomed" | "dead" | "too_soon" | "error";
+    | "overwatered" | "not_needed" | "bloomed" | "dead" | "too_soon"
+    | "no_item" | "error";
   reason?: string;
   grew?: boolean;
   bloomedNow?: boolean;
@@ -65,6 +69,7 @@ export type TendResult = {
   plotIdx?: number;
   nextDue?: string;
   readyAt?: string;
+  item?: string;
   windowStart?: number | null;
   windowEnd?: number | null;
   state?: GardenState;
@@ -129,3 +134,17 @@ export type HallOfFame = {
   gardens: HofEntry[];
   levels: HofEntry[];
 };
+
+export type ShopItem = {
+  key: string;
+  name: string;
+  blurb: string;
+  kind: "species" | "consumable" | "tool";
+  cost: number;
+  maxQty: number | null;
+  species: string | null;
+  owned: number;
+  affordable: boolean;
+};
+
+export type ShopState = { dewdrops: number; items: ShopItem[] };
