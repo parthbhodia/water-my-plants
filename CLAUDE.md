@@ -1,6 +1,6 @@
 # Lily Days — a daily gardening web game
 
-Live at https://waterlily.app (Vercel project `water-my-plants`, repo
+Live at https://waterlilly.app (Vercel project `water-my-plants`, repo
 `parthbhodia/water-my-plants`). Players water eight species — each with its
 own care contract — one turn per plant per local day, and compete in weekly
 timezone-banded leagues. Coins ("dewdrops") are earned only by tending;

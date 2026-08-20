@@ -12,7 +12,7 @@ function resolveSiteUrl(): string {
   if (vercel) return `https://${vercel}`;
   const deployment = process.env.NEXT_PUBLIC_VERCEL_URL;
   if (deployment) return `https://${deployment}`;
-  return "https://waterlily.app";
+  return "https://waterlilly.app";
 }
 
 export const SITE_URL = resolveSiteUrl();

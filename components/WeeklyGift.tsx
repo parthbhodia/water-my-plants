@@ -21,19 +21,23 @@ export default function WeeklyGift({
   refreshKey,
   onState,
   showToast,
+  preview,
 }: {
   refreshKey: number;
   onState: (s: GardenState) => void;
   showToast: (msg: string, ms?: number, mood?: "happy" | "cheer" | "worry" | "proud" | "sleepy") => void;
+  /** Render from fixed data instead of the RPC (dev fixtures only). */
+  preview?: GiftState;
 }) {
-  const [gift, setGift] = useState<GiftState | null>(null);
+  const [gift, setGift] = useState<GiftState | null>(preview ?? null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (preview) return;
     createClient().rpc("get_weekly_gift").then(({ data }) => {
       if (data) setGift(data as GiftState);
     });
-  }, [refreshKey]);
+  }, [refreshKey, preview]);
 
   if (!gift || gift.claimed) return null;
 
