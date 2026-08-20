@@ -16,6 +16,7 @@ import Leaderboard from "./Leaderboard";
 import ShopPanel from "./ShopPanel";
 import ProfilePanel from "./ProfilePanel";
 import TabBar, { type PanelTab } from "./TabBar";
+import LeagueRail from "./LeagueRail";
 import TodayBrief from "./TodayBrief";
 import DecorBar from "./DecorBar";
 
@@ -252,6 +253,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
 
   return (
     <main className="garden-wrap">
+      <div className="garden-shell">
+      <div className="garden-main">
       <div className="game-frame">
         <GameCanvas bridge={bridge} />
 
@@ -318,6 +321,13 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           </div>
         </div>
       )}
+
+      </div>
+
+      {state && (
+        <LeagueRail refreshKey={briefKey} onOpenFull={() => { sfx.click(); setTab("league"); }} />
+      )}
+      </div>
 
       {seedFor && state && (
         <SeedPicker

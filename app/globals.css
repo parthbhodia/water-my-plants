@@ -1170,3 +1170,60 @@ button { font-family: var(--font); cursor: pointer; }
 }
 .decor-slot:hover { background: #fff; border-style: solid; }
 .decor-slot.taken { border-style: solid; background: rgba(255,215,110,.3); }
+
+/* ===== Two-column shell: garden left, standings right ===== */
+.garden-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 1400px;
+  align-items: start;
+  justify-items: center;
+}
+.garden-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.rail {
+  display: none;                       /* only earns its place on a wide screen */
+  width: 100%;
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 #fff, var(--shadow-md);
+  padding: 12px;
+}
+.rail-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.rail-title { font-weight: 900; font-size: 1rem; }
+.rail-days {
+  font-size: .76rem; font-weight: 800; color: var(--clay);
+  font-variant-numeric: tabular-nums;
+}
+.rail-sub { display: flex; align-items: center; gap: 7px; margin: 8px 0 6px; flex-wrap: wrap; }
+.rail-season { font-size: .74rem; font-weight: 700; color: var(--ink-soft); }
+.rail-me {
+  display: flex; align-items: baseline; gap: 7px;
+  background: linear-gradient(180deg, #fff8e6, #ffeec4);
+  border: 1px solid rgba(255,255,255,.9); border-radius: 12px;
+  padding: 7px 12px; margin-bottom: 9px;
+  box-shadow: inset 0 1px 0 #fff;
+}
+.rail-me b { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.rail-me span { font-size: .78rem; color: var(--ink-soft); font-weight: 700; }
+.rail-list { max-height: 42vh; overflow-y: auto; }
+.rail-empty { font-size: .78rem; color: var(--ink-soft); margin: 8px 0 0; line-height: 1.45; }
+.rail-more { width: 100%; margin-top: 10px; }
+
+@media (min-width: 1200px) {
+  .garden-shell { grid-template-columns: minmax(0, 1fr) 296px; justify-items: stretch; }
+  .rail { display: block; position: sticky; top: 12px; }
+  /* the tab stays: the rail shows this week, the tab holds all-time and neighbours */
+}
