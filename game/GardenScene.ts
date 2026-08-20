@@ -1,7 +1,7 @@
 import * as Phaser from "phaser";
 import type { GameBridge, SceneApi } from "./bridge";
 import type { GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
-import { drawPlant } from "./plants";
+import { drawPlant, bloomScale } from "./plants";
 import { SPECIES_BY_KEY } from "@/lib/species";
 import { DECOR_SLOTS, drawDecor, drawKoi } from "./decor";
 import { type Ctx, type Stop, lg, rgrad, rr, ell, blob, petalPath } from "./draw";
@@ -138,6 +138,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private pendingPour = false;
   private pendingAction: TendAction = "water";
   private pendingPlot = 0;
+  private celebrating = false;
   private pipG!: Phaser.GameObjects.Graphics;
   private pouring = false;
   private nearPond = false;
@@ -245,7 +246,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
   /** Walk to a plot, then perform the action there. */
   requestTend(plotIdx: number, action: TendAction) {
-    if (this.pouring) return;
+    if (this.pouring || this.celebrating) return;
     if (!this.plotUnlocked(plotIdx)) return;
     this.selected = plotIdx;
     this.pendingAction = action;
@@ -265,7 +266,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
   applyOutcome(r: TendResult) {
     this.endPour();
-    const idx = this.pendingPlot;
+    // the server is authoritative about which plot it acted on; the local
+    // pendingPlot is only a fallback if a pour was never started
+    const idx = r.plotIdx ?? this.pendingPlot;
     if (r.state) this.setGarden(r.state);
 
     if (r.status === "watered" || r.status === "fed" || r.status === "pruned") {
@@ -1434,7 +1437,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   }
 
   private updatePlayer() {
-    if (!this.player || this.pouring) return;
+    if (!this.player || this.pouring || this.celebrating) return;
 
     let vx = 0;
     const left = this.cursors?.left?.isDown || this.keys?.A?.isDown;
@@ -1578,11 +1581,114 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.sparkles.explode(26, PLOTS[i].x, PLOTS[i].y - 44);
   }
 
+  /**
+   * The payoff for a week (or a month) of showing up: the plant lifts out of
+   * its plot, fills the screen at full size while the garden dims behind it,
+   * then settles back down and play resumes.
+   */
   private celebrateBloom(i: number) {
-    const p = PLOTS[i] ?? PLOTS[0];
-    this.confetti.explode(90, p.x, p.y - 120);
-    this.time.delayedCall(280, () => this.sparkles.explode(30, p.x, p.y - 50));
-    this.time.delayedCall(600, () => this.confetti.explode(50, p.x, p.y - 140));
+    const plot = PLOTS[i] ?? PLOTS[0];
+    const node = this.plotNodes[i];
+    if (!node || this.celebrating) return;
+    this.celebrating = true;
+
+    const sp = SPECIES_BY_KEY[this.plotState(i)?.plant?.species ?? ""];
+    const plant = this.plotState(i)?.plant;
+    const CX = W / 2;
+    const CY = 350;
+    const heroScale = sp ? bloomScale(sp.form, 300) : 1.5;
+    const heroY = 500;
+
+    const overlay = this.add.rectangle(CX, H / 2, W, H, 0x0c2b23, 0).setDepth(80);
+    const rays = this.add
+      .image(CX, CY + 40, "ray")
+      .setDepth(81).setAlpha(0).setScale(1.9)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const glow = this.add
+      .image(CX, CY + 40, "sunglow")
+      .setDepth(81).setAlpha(0).setScale(2.6)
+      .setTint(0xffe0ee)
+      .setBlendMode(Phaser.BlendModes.SCREEN);
+
+    // the plant itself, lifted out of the plot
+    const big = this.add
+      .image(plot.x, plot.y, "plant_" + i)
+      .setOrigin(node.img.originX, node.img.originY)
+      .setScale(0.5)
+      .setDepth(82);
+    node.img.setVisible(false);
+
+    const font = '"Trebuchet MS", Verdana, system-ui, sans-serif';
+    const title = this.add
+      .text(CX, 108, "Full Bloom!", {
+        fontFamily: font, fontSize: "58px", color: "#fff8fb",
+        stroke: "#c9527a", strokeThickness: 9,
+      })
+      .setOrigin(0.5).setDepth(83).setAlpha(0).setScale(0.6);
+    const sub = this.add
+      .text(CX, 164, sp?.name ?? "", {
+        fontFamily: font, fontSize: "27px", color: "#ffffff",
+        stroke: "#3e8e52", strokeThickness: 6,
+      })
+      .setOrigin(0.5).setDepth(83).setAlpha(0);
+    const foot = this.add
+      .text(CX, H - 46,
+        plant ? `${plant.dayNumber} days of care · +${sp?.points ?? 0} points` : "",
+        { fontFamily: font, fontSize: "21px", color: "#fdf6e3" })
+      .setOrigin(0.5).setDepth(83).setAlpha(0);
+
+    const spin = this.tweens.add({
+      targets: rays, angle: 360, duration: 9000, repeat: -1,
+    });
+
+    // 1. dim the garden and lift the plant to centre stage
+    this.tweens.add({ targets: overlay, fillAlpha: 0.55, duration: 320 });
+    this.tweens.add({ targets: [rays, glow], alpha: { from: 0, to: 0.75 }, duration: 500 });
+    this.tweens.add({
+      targets: big,
+      x: CX, y: heroY, scale: heroScale,
+      duration: 780, ease: "Back.easeOut",
+    });
+    this.tweens.add({
+      targets: title, alpha: 1, scale: 1, duration: 520, delay: 260,
+      ease: "Back.easeOut",
+    });
+    this.tweens.add({ targets: [sub, foot], alpha: 1, duration: 420, delay: 460 });
+
+    // 2. the fanfare
+    this.confetti.explode(70, CX, CY - 40);
+    this.time.delayedCall(260, () => this.sparkles.explode(34, CX, CY + 40));
+    this.time.delayedCall(620, () => this.confetti.explode(60, CX - 180, CY - 20));
+    this.time.delayedCall(760, () => this.confetti.explode(60, CX + 180, CY - 20));
+    this.time.delayedCall(1150, () => this.sparkles.explode(26, CX, CY + 90));
+
+    // a proud little bob while it is up there
+    this.time.delayedCall(800, () => {
+      if (!big.active) return;
+      this.tweens.add({
+        targets: big, y: heroY - 14, duration: 900, yoyo: true, repeat: 1,
+        ease: "Sine.easeInOut",
+      });
+    });
+
+    // 3. settle back into the plot and hand the garden back
+    this.time.delayedCall(3000, () => {
+      this.tweens.add({ targets: [title, sub, foot], alpha: 0, duration: 320 });
+      this.tweens.add({ targets: [rays, glow], alpha: 0, duration: 420 });
+      this.tweens.add({ targets: overlay, fillAlpha: 0, duration: 520, delay: 120 });
+      this.tweens.add({
+        targets: big,
+        x: plot.x, y: plot.y, scale: 0.5,
+        duration: 700, delay: 120, ease: "Cubic.easeInOut",
+        onComplete: () => {
+          node.img.setVisible(true);
+          spin.remove();
+          [overlay, rays, glow, big, title, sub, foot].forEach((o) => o.destroy());
+          this.celebrating = false;
+          this.happyWiggle(i);
+        },
+      });
+    });
   }
 
   private updateSplashes(time: number) {

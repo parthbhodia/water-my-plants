@@ -507,3 +507,18 @@ export function drawPlant(c: Ctx, sp: SpeciesDef, look: PlantLook) {
 
   c.restore();
 }
+
+/**
+ * Roughly how tall each form draws, in logical units, so a celebration can
+ * show every species at the same on-screen presence — a lily is short and a
+ * sunflower is tall, but both should fill the moment equally.
+ */
+const NOMINAL_HEIGHT: Record<PlantForm, number> = {
+  pad: 62, tall: 150, frond: 88, succulent: 82,
+  vine: 108, bush: 78, orchid: 98, tree: 92,
+};
+
+/** Sprite scale that renders `form` at about `targetPx` tall. */
+export function bloomScale(form: PlantForm, targetPx = 300): number {
+  return targetPx / (NOMINAL_HEIGHT[form] * 2);
+}
