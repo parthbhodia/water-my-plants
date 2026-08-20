@@ -104,3 +104,28 @@ export type LeagueState = {
   members: LeagueMember[];
   lastSeason: { rank: number; movement: number; tierName: string } | null;
 };
+
+export type HofEntry = {
+  rank: number;
+  name: string;
+  avatar: Avatar;
+  value: number;
+  isMe: boolean;
+};
+
+export type HallOfFame = {
+  me: {
+    level: number;
+    lifetimeEarned: number;
+    nextLevelAt: number;
+    blooms: number;
+    bestStreak: number;
+    gardenValue: number;
+    gardeningSince: string;
+    daysTending: number;
+  };
+  blooms: HofEntry[];
+  streaks: HofEntry[];
+  gardens: HofEntry[];
+  levels: HofEntry[];
+};
