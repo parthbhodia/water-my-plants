@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Leaf, Trophy, Droplets, BookOpen, Palette, CircleHelp, Volume2, VolumeX, LogOut,
+  Leaf, Trophy, Droplets, BookOpen, Palette, CircleHelp, Volume2, VolumeX, LogOut, Music, Music2,
 } from "lucide-react";
 import type { GardenState } from "@/lib/types";
 
@@ -13,6 +13,8 @@ export default function Hud({
   onLeague,
   onHelp,
   onToggleMute,
+  onToggleMusic,
+  musicOn,
   onSignOut,
 }: {
   state: GardenState;
@@ -22,6 +24,8 @@ export default function Hud({
   onLeague: () => void;
   onHelp: () => void;
   onToggleMute: () => void;
+  onToggleMusic: () => void;
+  musicOn: boolean;
   onSignOut: () => void;
 }) {
   const live = state.plots.filter((p) => p.plant && !p.plant.dead).length;
@@ -49,6 +53,14 @@ export default function Hud({
         <button className="hud-icon-btn" onClick={onJournal} title="Almanac"><BookOpen size={19} strokeWidth={2.2} aria-hidden /></button>
         <button className="hud-icon-btn" onClick={onStudio} title="Profile & gardener"><Palette size={19} strokeWidth={2.2} aria-hidden /></button>
         <button className="hud-icon-btn" onClick={onHelp} title="How to play"><CircleHelp size={19} strokeWidth={2.2} aria-hidden /></button>
+        <button
+          className="hud-icon-btn"
+          onClick={onToggleMusic}
+          title={musicOn ? "Music off" : "Music on"}
+          style={musicOn ? undefined : { opacity: 0.55 }}
+        >
+          {musicOn ? <Music size={19} strokeWidth={2.2} aria-hidden /> : <Music2 size={19} strokeWidth={2.2} aria-hidden />}
+        </button>
         <button className="hud-icon-btn" onClick={onToggleMute} title={muted ? "Unmute" : "Mute"}>
           {muted ? <VolumeX size={19} strokeWidth={2.2} aria-hidden /> : <Volume2 size={19} strokeWidth={2.2} aria-hidden />}
         </button>

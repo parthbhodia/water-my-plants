@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 import { GameBridge } from "@/game/bridge";
-import { sfx } from "@/game/audio";
+import { sfx, music } from "@/game/audio";
 import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
 import type { CompletedLily, GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
 import { welcomeMessage, welcomeMood, tendMessage, tendMood } from "@/lib/messages";
@@ -23,6 +23,7 @@ import LeagueRail from "./LeagueRail";
 import TodayBrief from "./TodayBrief";
 import DecorBar from "./DecorBar";
 import RestorePanel from "./RestorePanel";
+import WeeklyGift from "./WeeklyGift";
 import Tutorial from "./Tutorial";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
@@ -38,6 +39,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [seedFor, setSeedFor] = useState<PlotState | null>(null);
   const [completed, setCompleted] = useState<CompletedLily[] | null>(null);
   const [muted, setMuted] = useState(false);
+  const [musicOn, setMusicOn] = useState(true);
   const [avatar, setAvatar] = useState<Avatar>(DEFAULT_AVATAR);
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -64,7 +66,15 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   // ---- initial load ----
   useEffect(() => {
     sfx.init();
+    music.init();
     setMuted(sfx.muted);
+    setMusicOn(music.on);
+    const kick = () => music.start();
+    window.addEventListener("pointerdown", kick, { once: true });
+    return () => window.removeEventListener("pointerdown", kick);
+  }, []);
+
+  useEffect(() => {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     supabase.rpc("get_garden_state", { p_timezone: timezone }).then(({ data, error }) => {
       if (error) {
@@ -242,7 +252,15 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     const next = !sfx.muted;
     sfx.setMuted(next);
     setMuted(next);
-    if (!next) sfx.click();
+    if (next) music.stop();
+    else { sfx.click(); music.start(); }
+  }, []);
+
+  const toggleMusic = useCallback(() => {
+    const next = !music.on;
+    music.setOn(next);
+    setMusicOn(next);
+    sfx.click();
   }, []);
 
   const needCare = state
@@ -279,6 +297,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             onLeague={() => { sfx.click(); setTab("league"); }}
             onHelp={() => { sfx.click(); setTutorial(true); }}
             onToggleMute={toggleMute}
+            onToggleMusic={toggleMusic}
+            musicOn={musicOn}
             onSignOut={signOut}
           />
         )}
@@ -314,6 +334,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           />
           <div className="panel-body">
             {tab === "garden" && <TodayBrief refreshKey={briefKey} />}
+            {tab === "garden" && (
+              <WeeklyGift refreshKey={briefKey} onState={applyState} showToast={showToast} />
+            )}
             {tab === "garden" && (
               <PlotBar
                 state={state}

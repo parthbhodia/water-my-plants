@@ -1703,3 +1703,28 @@ button { font-family: var(--font); cursor: pointer; }
 .stat { display: inline-flex; align-items: center; gap: 4px; }
 .restore-icon { color: var(--leaf-deep); display: grid; place-items: center; }
 .tb-icon { display: grid; place-items: center; }
+
+/* ---------- Granny's weekly basket ---------- */
+.gift-bar {
+  margin-bottom: 10px; padding: 11px 13px;
+  background: linear-gradient(180deg, #fff9ec, #f7ecd4);
+  border: 1px solid rgba(200,150,50,.35); border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 #fff, 0 8px 18px -10px rgba(31,61,45,.3);
+}
+.gift-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.gift-title { display: flex; flex-direction: column; gap: 1px; }
+.gift-title b { display: inline-flex; align-items: center; gap: 5px; font-size: .92rem; color: #7a5a1c; }
+.gift-title span { font-size: .76rem; color: var(--ink-soft); font-weight: 600; }
+.gift-options { display: flex; gap: 8px; flex-wrap: wrap; }
+.gift-card {
+  flex: 1 1 170px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  cursor: pointer; font: inherit; text-align: center; color: var(--ink);
+  background: rgba(255,255,255,.75); border: 2px solid rgba(200,150,50,.3);
+  border-radius: 14px; padding: 10px 10px 9px;
+  transition: transform .15s ease, border-color .15s ease;
+}
+.gift-card:hover { transform: translateY(-3px); border-color: var(--sun); }
+.gift-card:disabled { opacity: .6; cursor: default; transform: none; }
+.gift-card svg { color: #a8791f; }
+.gift-card b { font-size: .84rem; }
+.gift-card span { font-size: .72rem; color: var(--ink-soft); line-height: 1.3; }

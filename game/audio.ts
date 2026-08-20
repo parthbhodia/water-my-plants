@@ -72,3 +72,137 @@ class Sfx {
 }
 
 export const sfx = new Sfx();
+
+// ============================================================
+// Ambient garden music — generated, like everything else.
+// A slow pad drifts through a four-chord loop while a pentatonic
+// music box answers overhead; a feedback delay gives it air.
+// ============================================================
+
+// C major pentatonic across two octaves — no wrong notes
+const PLUCK_NOTES = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.7, 1318.5];
+// Cmaj7 → Am7 → Fmaj7 → G6, roots an octave down
+const CHORDS: number[][] = [
+  [130.81, 196.0, 246.94, 329.63],
+  [110.0, 164.81, 220.0, 261.63],
+  [87.31, 174.61, 220.0, 261.63],
+  [98.0, 146.83, 246.94, 293.66],
+];
+
+class Music {
+  private ctx: AudioContext | null = null;
+  private out: GainNode | null = null;
+  private delay: DelayNode | null = null;
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private nextChordAt = 0;
+  private nextPluckAt = 0;
+  private chordIdx = 0;
+  on = true;
+
+  init() {
+    if (typeof window === "undefined") return;
+    this.on = window.localStorage.getItem("lily-music") !== "0";
+  }
+
+  setOn(on: boolean) {
+    this.on = on;
+    try { window.localStorage.setItem("lily-music", on ? "1" : "0"); } catch {}
+    if (on) this.start();
+    else this.stop();
+  }
+
+  /** Call from any user gesture; autoplay rules need one. */
+  start() {
+    if (!this.on || sfx.muted || typeof window === "undefined" || this.timer) return;
+    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    if (!this.ctx) this.ctx = new AC();
+    if (this.ctx.state === "suspended") void this.ctx.resume();
+    const ctx = this.ctx;
+
+    if (!this.out) {
+      const master = ctx.createGain();
+      master.gain.value = 0.055;
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 2400;
+      const delay = ctx.createDelay(1.2);
+      delay.delayTime.value = 0.42;
+      const fb = ctx.createGain();
+      fb.gain.value = 0.32;
+      delay.connect(fb).connect(delay);
+      lp.connect(master);
+      delay.connect(master);
+      master.connect(ctx.destination);
+      // stash the dry input as `out` and keep the echo line reachable
+      this.out = lp as unknown as GainNode;
+      this.delay = delay;
+    }
+
+    this.nextChordAt = ctx.currentTime + 0.2;
+    this.nextPluckAt = ctx.currentTime + 2;
+    this.timer = setInterval(() => this.schedule(), 250);
+  }
+
+  stop() {
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+  }
+
+  private schedule() {
+    const ctx = this.ctx;
+    if (!ctx || !this.out || sfx.muted) return;
+    const horizon = ctx.currentTime + 1;
+
+    while (this.nextChordAt < horizon) {
+      this.pad(CHORDS[this.chordIdx % CHORDS.length], this.nextChordAt);
+      this.chordIdx++;
+      this.nextChordAt += 8;
+    }
+    while (this.nextPluckAt < horizon) {
+      if (Math.random() < 0.8) {
+        const f = PLUCK_NOTES[Math.floor(Math.random() * PLUCK_NOTES.length)];
+        this.pluck(f, this.nextPluckAt);
+      }
+      this.nextPluckAt += 1.6 + Math.random() * 2.4;
+    }
+  }
+
+  /** Four soft detuned voices swelling in and out over ~9s. */
+  private pad(freqs: number[], t0: number) {
+    const ctx = this.ctx!;
+    for (const f of freqs) {
+      for (const det of [-3, 3]) {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = f;
+        osc.detune.value = det;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.16 / freqs.length, t0 + 3.2);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 9);
+        osc.connect(g).connect(this.out!);
+        osc.start(t0);
+        osc.stop(t0 + 9.2);
+      }
+    }
+  }
+
+  /** A single music-box note, echoed by the delay line. */
+  private pluck(freq: number, t0: number) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.09, t0 + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.4);
+    osc.connect(g);
+    g.connect(this.out!);
+    if (this.delay) g.connect(this.delay);
+    osc.start(t0);
+    osc.stop(t0 + 1.5);
+  }
+}
+
+export const music = new Music();
