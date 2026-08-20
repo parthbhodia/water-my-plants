@@ -44,7 +44,7 @@ export default function TodayBrief({ refreshKey }: { refreshKey: number }) {
       setBrief(data as Brief);
       setSaved(
         enabled
-          ? `Lovely — I'll write to you at ${String(hour).padStart(2, "0")}:00, your time.`
+          ? `Lovely — I'll write to you at ${String(hour).padStart(2, "0")}:00.`
           : "No letters, then — I'll keep everything ready here."
       );
       setTimeout(() => setSaved(null), 3500);
