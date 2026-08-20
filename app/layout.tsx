@@ -1,23 +1,65 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import PwaSetup from "@/components/PwaSetup";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
+
+const DESCRIPTION =
+  "A free daily gardening game. Water eight species — each on its own schedule — in about a minute a day, and climb a weekly league of gardeners on your own clock.";
 
 export const metadata: Metadata = {
-  title: "Lily Days 🌸 — a tiny daily garden",
-  description:
-    "Tend a garden of water lilies, sunflowers and stranger things. One watering a day, every day — and a league to climb.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Lily Days — a free daily gardening game you play in a minute",
+    // Sub-pages set their own title; this keeps the brand in the SERP snippet.
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    "daily gardening game",
+    "free browser game",
+    "plant growing game",
+    "idle garden game",
+    "cozy game",
+    "one minute a day game",
+    "water lily game",
+    "gardening game with leaderboard",
+  ],
+  authors: [{ name: SITE_NAME }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  alternates: { canonical: "/" },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Lily Days",
+    title: SITE_NAME,
     statusBarStyle: "default",
   },
-  openGraph: {
-    title: "Lily Days — a daily garden",
-    description:
-      "One watering a day. Eight species, each with its own schedule. Climb a weekly league of gardeners on your clock.",
-    type: "website",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
   },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    url: "/",
+    title: "Lily Days — a free daily gardening game",
+    description: DESCRIPTION,
+    locale: "en_GB",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Lily Days — a free daily gardening game",
+    description: DESCRIPTION,
+  },
+  category: "games",
 };
 
 export const viewport: Viewport = {
