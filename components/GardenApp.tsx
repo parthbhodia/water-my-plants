@@ -26,6 +26,7 @@ import RestorePanel from "./RestorePanel";
 import WeeklyGift from "./WeeklyGift";
 import Tutorial from "./Tutorial";
 import CoachMarks from "./CoachMarks";
+import HintRing from "./HintRing";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
 
@@ -50,6 +51,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [rotateHint, setRotateHint] = useState(true);
   const [coach, setCoach] = useState(false);
+  const [guided, setGuided] = useState<null | "water">(null);
+  const guidedRef = useRef<null | "water">(null);
+  useEffect(() => { guidedRef.current = guided; }, [guided]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acting = useRef(false);
 
@@ -134,7 +138,21 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           } else {
             sfx.wiggle();
           }
-          showToast(tendMessage(result, state?.displayName), 5600, tendMood(result));
+          if (guidedRef.current === "water" && result.status === "watered") {
+            guidedRef.current = null;
+            setGuided(null);
+            try { window.localStorage.setItem("lily-guided-done", "1"); } catch {}
+            showToast("That's the whole ritual — one drink, once a day. She'll be taller tomorrow. 🌱", 9000, "proud");
+            setTimeout(() => {
+              bridge.releaseFocus();
+              // the tour of the interface waits until the close-up is over
+              try {
+                if (!window.localStorage.getItem("lily-coach-done")) setCoach(true);
+              } catch {}
+            }, 3200);
+          } else {
+            showToast(tendMessage(result, state?.displayName), 5600, tendMood(result));
+          }
           acting.current = false;
           setBusy(false);
         }, 850);
@@ -184,11 +202,22 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
         showToast(error.message);
         return;
       }
+      const wasFirstSeed = !state?.plots.some((p) => p.plant);
       applyState(data as GardenState);
       sfx.grow();
-      showToast("Planted! Keep to its schedule and it will thrive. 🌱");
+      let guide = false;
+      try { guide = wasFirstSeed && !window.localStorage.getItem("lily-guided-done"); } catch {}
+      if (guide) {
+        setSelected(seedFor.idx);
+        bridge.select(seedFor.idx);
+        bridge.focusPlot(seedFor.idx);
+        setGuided("water");
+        showToast("There she is! Now the first drink — press Water. 💧", 12000, "cheer");
+      } else {
+        showToast("Planted! Keep to its schedule and it will thrive. 🌱");
+      }
     },
-    [supabase, seedFor, applyState, showToast]
+    [supabase, seedFor, applyState, showToast, state, bridge]
   );
 
   const clearPlot = useCallback(
@@ -434,8 +463,10 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             setTutorial(false);
             setState((s) => (s ? { ...s, tutorialDone: true } : s));
             try {
-              if (!window.localStorage.getItem("lily-coach-done")) setCoach(true);
-            } catch { setCoach(true); }
+              // if they chose "plant my first seed", the guided close-up runs
+              // first and hands over to the coach afterwards
+              if (!plant && !window.localStorage.getItem("lily-coach-done")) setCoach(true);
+            } catch { if (!plant) setCoach(true); }
             if (plant) {
               const first =
                 state.plots.find((p) => p.unlocked && !p.plant) ??
@@ -453,7 +484,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
         />
       )}
 
-      {coach && state && !seedFor && (
+      {guided === "water" && <HintRing sel=".plot-buttons .btn.blue" />}
+
+      {coach && state && !seedFor && !guided && (
         <CoachMarks
           onDone={() => {
             setCoach(false);

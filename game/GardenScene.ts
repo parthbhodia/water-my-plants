@@ -325,6 +325,38 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.refreshMarkers();
   }
 
+  /** One interpolator drives zoom AND centre — pan+zoom tweens fight. */
+  private glideCamera(cx: number, cy: number, zoomMul: number, ms: number) {
+    const cam = this.cameras.main;
+    const cover = Math.max(this.scale.width / W, this.scale.height / H);
+    const z0 = cam.zoom;
+    const c0 = { x: cam.midPoint.x, y: cam.midPoint.y };
+    const z1 = cover * zoomMul;
+    this.userZoom = zoomMul;
+    const proxy = { t: 0 };
+    this.tweens.add({
+      targets: proxy, t: 1, duration: ms, ease: "Sine.easeInOut",
+      onUpdate: () => {
+        cam.setZoom(Phaser.Math.Linear(z0, z1, proxy.t));
+        cam.centerOn(
+          Phaser.Math.Linear(c0.x, cx, proxy.t),
+          Phaser.Math.Linear(c0.y, cy, proxy.t)
+        );
+      },
+    });
+  }
+
+  /** Glide the camera into one plot and hold there (guided planting). */
+  focusPlot(i: number, zoomMul = 1.85) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    this.glideCamera(p.x, p.y - 46, zoomMul, 950);
+  }
+
+  /** Ease back out to the whole garden. */
+  releaseFocus() {
+    this.glideCamera(W / 2, 480, 1, 850);
+  }
+
   /** Cover-fit the world, then multiply in the player's own zoom. */
   private applyCamera(recenter = false) {
     const cam = this.cameras.main;

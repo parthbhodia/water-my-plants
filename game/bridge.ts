@@ -9,6 +9,8 @@ export interface SceneApi {
   selectPlot(i: number): void;
   applyOutcome(r: TendResult): void;
   setFrozen(v: boolean): void;
+  focusPlot(i: number, zoomMul?: number): void;
+  releaseFocus(): void;
 }
 
 export class GameBridge {
@@ -54,6 +56,15 @@ export class GameBridge {
 
   applyOutcome(r: TendResult) {
     this.sceneApi?.applyOutcome(r);
+  }
+
+  /** Camera dive into one plot (guided planting) and back out. */
+  focusPlot(i: number, zoomMul?: number) {
+    this.sceneApi?.focusPlot(i, zoomMul);
+  }
+
+  releaseFocus() {
+    this.sceneApi?.releaseFocus();
   }
 
   /** Stops the gardener responding to keys/taps while a modal is open. */
