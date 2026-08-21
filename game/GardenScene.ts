@@ -150,6 +150,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private autoTarget: { x: number; y: number } | null = null;
   private pendingPour = false;
   private lastStepMs = 0;
+  private userZoom = 1;
+  private panActive = false;
+  private pinchDist = 0;
+  private downAt = { x: 0, y: 0 };
   private pendingAction: TendAction = "water";
   private pendingPlot = 0;
   private celebrating = false;
@@ -192,8 +196,62 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       this.cursors = kb.createCursorKeys();
       this.keys = kb.addKeys("W,A,S,D,E,SPACE") as Record<string, Phaser.Input.Keyboard.Key>;
     }
+    // ---- camera: the canvas covers its container; the camera covers the world ----
+    this.cameras.main.setBounds(0, 0, W, H);
+    this.applyCamera(true);
+    this.scale.on("resize", () => this.applyCamera(true));
+    this.input.addPointer(1); // two touches for pinching
+
+    this.input.on("wheel", (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      const before = this.userZoom;
+      this.userZoom = Phaser.Math.Clamp(this.userZoom * (dy > 0 ? 0.9 : 1.11), 1, 2.4);
+      if (this.userZoom !== before) {
+        this.applyCamera();
+        // ease the view toward the cursor so zooming feels aimed
+        const cam = this.cameras.main;
+        cam.centerOn(
+          Phaser.Math.Linear(cam.midPoint.x, p.worldX, 0.35),
+          Phaser.Math.Linear(cam.midPoint.y, p.worldY, 0.35)
+        );
+      }
+    });
+
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      if (this.frozen) return;
+      this.downAt = { x: p.x, y: p.y };
+      this.panActive = false;
+    });
+
+    this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+      const p2 = this.input.pointer2;
+      const cam = this.cameras.main;
+      if (p.isDown && p2?.isDown) {
+        // pinch: zoom by the change in finger distance, pan by the midpoint
+        const d = Phaser.Math.Distance.Between(p.x, p.y, p2.x, p2.y);
+        if (this.pinchDist > 0) {
+          this.userZoom = Phaser.Math.Clamp(this.userZoom * (d / this.pinchDist), 1, 2.4);
+          this.applyCamera();
+        }
+        this.pinchDist = d;
+        this.panActive = true;
+        return;
+      }
+      this.pinchDist = 0;
+      if (!p.isDown) return;
+      const moved = Phaser.Math.Distance.Between(p.x, p.y, this.downAt.x, this.downAt.y);
+      if ((this.panActive || moved > 14) && this.userZoom > 1.02) {
+        this.panActive = true;
+        cam.scrollX -= (p.x - p.prevPosition.x) / cam.zoom;
+        cam.scrollY -= (p.y - p.prevPosition.y) / cam.zoom;
+      }
+    });
+
+    this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
+      const wasPan = this.panActive || this.input.pointer2?.isDown;
+      this.panActive = false;
+      this.pinchDist = 0;
+      if (wasPan || this.frozen) return;
+      const moved = Phaser.Math.Distance.Between(p.x, p.y, this.downAt.x, this.downAt.y);
+      if (moved > 14) return; // a drag, not a tap
       let best = -1;
       let bestD = 78 * 78;
       PLOTS.forEach((pl, i) => {
@@ -265,6 +323,16 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.refreshDecor();
     this.refreshZones();
     this.refreshMarkers();
+  }
+
+  /** Cover-fit the world, then multiply in the player's own zoom. */
+  private applyCamera(recenter = false) {
+    const cam = this.cameras.main;
+    const cover = Math.max(this.scale.width / W, this.scale.height / H);
+    cam.setZoom(cover * this.userZoom);
+    // When cropping (cover > fit) the default view is the top of the sky;
+    // aim at the yard instead. Bounds clamp whatever we ask for.
+    if (recenter) cam.centerOn(W / 2, 480);
   }
 
   /** Freezes walking and taps while React shows a full-screen panel. */
@@ -1970,6 +2038,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     const node = this.plotNodes[i];
     if (!node || this.celebrating) return;
     this.celebrating = true;
+    // the celebration stages the whole world — pull the camera back out
+    this.userZoom = 1;
+    this.applyCamera(true);
 
     const sp = SPECIES_BY_KEY[this.plotState(i)?.plant?.species ?? ""];
     const plant = this.plotState(i)?.plant;

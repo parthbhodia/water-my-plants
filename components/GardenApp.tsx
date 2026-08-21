@@ -25,6 +25,7 @@ import DecorBar from "./DecorBar";
 import RestorePanel from "./RestorePanel";
 import WeeklyGift from "./WeeklyGift";
 import Tutorial from "./Tutorial";
+import CoachMarks from "./CoachMarks";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
 
@@ -46,6 +47,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [busy, setBusy] = useState(false);
   const [briefKey, setBriefKey] = useState(0);
   const [tutorial, setTutorial] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [rotateHint, setRotateHint] = useState(true);
+  const [coach, setCoach] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acting = useRef(false);
 
@@ -333,6 +337,12 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           <div className="key-hints">W A S D / arrows to walk · E to water</div>
         )}
 
+        {state && rotateHint && (
+          <button className="rotate-chip" onClick={() => setRotateHint(false)}>
+            Rotate for full screen ↻
+          </button>
+        )}
+
         {toast && (
           <div className="toast guide-toast">
             <GuidePortrait mood={toast.mood} size={54} />
@@ -345,7 +355,14 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       </div>
 
       {state && (
-        <div className="panel-wrap">
+        <div className={`panel-wrap${sheetOpen ? " sheet-open" : ""}`}>
+          <button
+            className="sheet-handle"
+            onClick={() => setSheetOpen((o) => !o)}
+            aria-label={sheetOpen ? "Hide panel" : "Show panel"}
+          >
+            <span />
+          </button>
           <TabBar
             active={tab}
             onChange={(t) => { sfx.click(); setTab(t); }}
@@ -416,6 +433,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           onDone={(plant) => {
             setTutorial(false);
             setState((s) => (s ? { ...s, tutorialDone: true } : s));
+            try {
+              if (!window.localStorage.getItem("lily-coach-done")) setCoach(true);
+            } catch { setCoach(true); }
             if (plant) {
               const first =
                 state.plots.find((p) => p.unlocked && !p.plant) ??
@@ -429,6 +449,15 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
               }
             }
             showToast(welcomeMessage(state), 7000, welcomeMood(state));
+          }}
+        />
+      )}
+
+      {coach && state && !seedFor && (
+        <CoachMarks
+          onDone={() => {
+            setCoach(false);
+            try { window.localStorage.setItem("lily-coach-done", "1"); } catch {}
           }}
         />
       )}

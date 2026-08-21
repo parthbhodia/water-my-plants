@@ -9,7 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/garden",
     scope: "/",
     display: "standalone",
-    orientation: "portrait",
+    orientation: "landscape",
     background_color: "#bfe7f2",
     theme_color: "#58b368",
     categories: ["games", "lifestyle"],

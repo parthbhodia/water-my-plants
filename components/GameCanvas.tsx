@@ -19,11 +19,9 @@ export default function GameCanvas({ bridge }: { bridge: GameBridge }) {
       game = new Phaser.Game({
         type: Phaser.AUTO,
         parent: hostRef.current,
-        width: 960,
-        height: 600,
         backgroundColor: "#bfe7f2",
         scale: {
-          mode: Phaser.Scale.FIT,
+          mode: Phaser.Scale.RESIZE,
           autoCenter: Phaser.Scale.CENTER_BOTH,
         },
         render: { antialias: true, roundPixels: false },

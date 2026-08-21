@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { sfx } from "@/game/audio";
 import { SPECIES_BY_KEY, careSummary } from "@/lib/species";
@@ -14,6 +14,7 @@ type Step = {
   key: string;
   title: string;
   body: string;
+  touchBody?: string;
   art: "gardener" | "keys" | "species" | "calendar" | "timing" | "trophy";
   cta?: string;
 };
@@ -31,6 +32,8 @@ const STEPS: Step[] = [
     title: "Walk over and get to work",
     body:
       "Steer your gardener with W A S D or the arrow keys — any direction, all around the yard. Click a plot (or tap its chip below the garden) to walk there, then press E or the Water button.",
+    touchBody:
+      "Tap anywhere on the grass and your gardener strolls over. Tap a plant to walk to it, then press the Water button. Pinch to zoom in close.",
     art: "keys",
   },
   {
@@ -64,7 +67,7 @@ const STEPS: Step[] = [
   },
 ];
 
-function Art({ kind, avatar }: { kind: Step["art"]; avatar: Avatar }) {
+function Art({ kind, avatar, touch }: { kind: Step["art"]; avatar: Avatar; touch: boolean }) {
   if (kind === "gardener") {
     return (
       <div className="tut-art tut-art-gardener">
@@ -73,6 +76,16 @@ function Art({ kind, avatar }: { kind: Step["art"]; avatar: Avatar }) {
     );
   }
   if (kind === "keys") {
+    if (touch) {
+      return (
+        <div className="tut-art">
+          <div className="tut-keys">
+            <span className="tut-tap" aria-hidden>👆</span>
+            <span className="tut-keynote">tap the grass to stroll · tap a plant to tend it</span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="tut-art">
         <div className="tut-keys">
@@ -153,6 +166,10 @@ export default function Tutorial({
 }) {
   const [i, setI] = useState(0);
   const [closing, setClosing] = useState(false);
+  const touch = useMemo(
+    () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches,
+    []
+  );
   const step = STEPS[i];
   const last = i === STEPS.length - 1;
 
@@ -210,10 +227,10 @@ export default function Tutorial({
           <button className="tut-skip" onClick={() => finish(false)}>Skip</button>
         </div>
 
-        <Art kind={step.art} avatar={avatar} />
+        <Art kind={step.art} avatar={avatar} touch={touch} />
 
         <h2 className="tut-title">{step.title}</h2>
-        <p className="tut-body">{step.body}</p>
+        <p className="tut-body">{touch && step.touchBody ? step.touchBody : step.body}</p>
 
         <div className="tut-dots">
           {STEPS.map((s, n) => (
