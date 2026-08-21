@@ -69,6 +69,11 @@ before committing. `npm run build` + `tsc --noEmit` must pass.
 Kill the dev server with `pkill -f "[n]ext-server"` — a bare
 `pkill -f "next start"` kills your own shell.
 
+On localhost the scene exposes `window.__lilyProbe()` → `{x, y, pouring,
+target}` for movement assertions. Headless Chromium renders ~8fps; player
+movement uses wall-clock time so speeds still hold, but allow generous
+waits before screenshots.
+
 ## Conventions
 
 - Branch: `claude/lily-days-game-al8cgd` only.

@@ -124,6 +124,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private confetti!: Phaser.GameObjects.Particles.ParticleEmitter;
   private dropletsR!: Phaser.GameObjects.Particles.ParticleEmitter;
   private dropletsL!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private splashBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private splashG!: Phaser.GameObjects.Graphics;
   private pourSplashes: Array<{ x: number; y: number; t0: number }> = [];
   private avatar: Avatar = DEFAULT_AVATAR;
@@ -148,6 +149,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
   private autoTarget: { x: number; y: number } | null = null;
   private pendingPour = false;
+  private lastStepMs = 0;
   private pendingAction: TendAction = "water";
   private pendingPlot = 0;
   private celebrating = false;
@@ -181,6 +183,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.buildParticles();
     this.buildPost();
 
+    if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+      (window as unknown as Record<string, unknown>).__lilyProbe = () =>
+        ({ x: this.player?.x, y: this.player?.y, pouring: this.pouring, target: this.autoTarget });
+    }
     const kb = this.input.keyboard;
     if (kb) {
       this.cursors = kb.createCursorKeys();
@@ -298,9 +304,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
     if (r.status === "watered" || r.status === "fed" || r.status === "pruned") {
       this.splashAt(idx);
+      this.drinkGulp(idx);
+      this.wetSoil(idx);
+      if (r.dewEarned) this.rewardFloat(idx, r.dewEarned);
       if (r.grew) this.stagePop(idx);
       if (r.bloomedNow) this.celebrateBloom(idx);
-      this.happyWiggle(idx);
     } else if (r.status === "overwatered") {
       this.sadShake(idx);
     } else {
@@ -1612,6 +1620,16 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     });
     this.dropletsR = this.add.particles(0, 0, "drop", dropletCfg(1)).setDepth(955);
     this.dropletsL = this.add.particles(0, 0, "drop", dropletCfg(-1)).setDepth(955);
+    // the landing splash: droplets kicked up in every direction
+    this.splashBurst = this.add.particles(0, 0, "drop", {
+      speedX: { min: -120, max: 120 },
+      speedY: { min: -180, max: -40 },
+      gravityY: 700,
+      lifespan: 460,
+      scale: { min: 0.5, max: 1 },
+      alpha: { start: 0.95, end: 0 },
+      emitting: false,
+    }).setDepth(956);
     this.splashG = this.add.graphics().setDepth(9.5);
   }
 
@@ -1631,10 +1649,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     let ny = Phaser.Math.Clamp(y, WALK_TOP, WALK_BOTTOM);
 
     // the gardener does not paddle: push out of the pond along its normal.
-    // The bounds sit just OUTSIDE the painted water — the blob wobbles up to
-    // ~5% past POND_RX/RY, so anything smaller lets him stand in the shallows.
+    // The bounds sit just OUTSIDE the painted water; below the centre the
+    // radius grows further so the walk line clears the whole near bank —
+    // otherwise his body overlaps the water and he looks like he's swimming.
     const rx = POND_RX * 1.06;
-    const ry = POND_RY * 1.08;
+    const ry = ny > POND_Y ? POND_RY * 1.34 : POND_RY * 1.08;
     const dx = (nx - POND_X) / rx;
     const dy = (ny - POND_Y) / ry;
     const d = Math.hypot(dx, dy);
@@ -1644,7 +1663,8 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     }
     // the y clamp above can put him back in the water, so finish the job
     // sideways along whichever bank he is nearest
-    const row = (ny - POND_Y) / ry;
+    const ry2 = ny > POND_Y ? POND_RY * 1.34 : POND_RY * 1.08;
+    const row = (ny - POND_Y) / ry2;
     if (Math.abs(row) < 1) {
       const half = rx * Math.sqrt(1 - row * row);
       const off = nx - POND_X;
@@ -1653,13 +1673,20 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     return { x: Phaser.Math.Clamp(nx, 34, W - 34), y: ny };
   }
 
-  /** Where to stand to reach a plot: at the near bank for pond plots. */
+  /**
+   * Where to stand to reach a plot: always BESIDE the target, never on top
+   * of it, so facing it (and pouring at it) has an unambiguous direction.
+   */
   private standPointFor(i: number): { x: number; y: number } {
     const p = PLOTS[i] ?? PLOTS[0];
     if (p.kind === "water") {
-      return this.walkable(p.x, POND_Y + POND_RY * 0.9 + 16);
+      // on the bank, offset outward so the can pours in over the water
+      const side = p.x <= POND_X ? -1 : 1;
+      return this.walkable(p.x + side * 42, POND_Y + POND_RY * 1.34 + 6);
     }
-    return this.walkable(p.x, p.y + 36);
+    // approach from whichever side the gardener is already on
+    const side = this.player && this.player.x > p.x ? 1 : -1;
+    return this.walkable(p.x + side * 48, p.y + 12);
   }
 
   private updatePlayer() {
@@ -1680,7 +1707,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     } else if (this.autoTarget) {
       const dx = this.autoTarget.x - this.player.x;
       const dy = this.autoTarget.y - this.player.y;
-      if (Math.hypot(dx, dy) < 6) {
+      if (Math.hypot(dx, dy) < 14) {
         this.player.setPosition(this.autoTarget.x, this.autoTarget.y);
         this.autoTarget = null;
         if (this.pendingPour) {
@@ -1690,6 +1717,27 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       } else {
         vx = dx;
         vy = dy;
+        // If the straight line dives into the pond, walk the bank instead:
+        // swap the heading for the ellipse tangent that shortens the trip.
+        // Skip on final approach — near a bank-side target the tangent would
+        // orbit forever; the position clamp still keeps him dry.
+        const closing = Math.hypot(dx, dy) < 64;
+        const rx = POND_RX * 1.06;
+        const aheadY = this.player.y + (vy / Math.hypot(vx, vy)) * 26 * 0.62;
+        const ry = aheadY > POND_Y ? POND_RY * 1.34 : POND_RY * 1.08;
+        const step = 26; // look a little ahead so the turn starts early
+        const lx = (this.player.x + (vx / Math.hypot(vx, vy)) * step - POND_X) / rx;
+        const ly = (this.player.y + (vy / Math.hypot(vx, vy)) * step * 0.62 - POND_Y) / ry;
+        if (!closing && lx * lx + ly * ly < 1) {
+          const px = (this.player.x - POND_X) / rx;
+          const py = (this.player.y - POND_Y) / ry;
+          // two ways around; take the one that points toward the target
+          const t1 = { x: -py * rx, y: px * ry };
+          const t2 = { x: py * rx, y: -px * ry };
+          const pick = t1.x * dx + t1.y * dy >= t2.x * dx + t2.y * dy ? t1 : t2;
+          vx = pick.x;
+          vy = pick.y;
+        }
       }
     }
 
@@ -1697,8 +1745,14 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     if (len > 0.0001) {
       // normalise so diagonals are not faster, and slow vertical movement a
       // little because the yard is drawn in perspective
-      const dt = this.game.loop.delta / 1000;
-      const speed = 215 * dt;
+      // real elapsed time, not Phaser's smoothed delta: on a slow device
+      // (or a headless test) frames stretch and the smoothed value under-
+      // reports, leaving the gardener wading through treacle
+      const nowMs = performance.now();
+      const dt = Math.min((nowMs - (this.lastStepMs || nowMs)) / 1000, 0.25);
+      this.lastStepMs = nowMs;
+      // walking to a tapped target is brisker than strolling by key
+      const speed = (this.autoTarget ? 290 : 215) * dt;
       const next = this.walkable(
         this.player.x + (vx / len) * speed,
         this.player.y + (vy / len) * speed * 0.62
@@ -1706,9 +1760,12 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       this.player.setPosition(next.x, next.y);
       if (Math.abs(vx) > 0.5) this.player.setFlipX(vx < 0);
       if (!this.isWalking()) this.player.play("walk");
-    } else if (this.isWalking()) {
-      this.player.play("idle");
-      this.player.setTexture("g_idle_0");
+    } else {
+      this.lastStepMs = 0;
+      if (this.isWalking()) {
+        this.player.play("idle");
+        this.player.setTexture("g_idle_0");
+      }
     }
 
     // sort against everything else standing in the yard, and shrink slightly
@@ -1746,8 +1803,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       if (!this.pouring) return;
       const dir = this.player.flipX ? -1 : 1;
       const em = dir === 1 ? this.dropletsR : this.dropletsL;
-      // spout tip of the tilted can, mirrored with the sprite
-      em.setPosition(this.player.x + dir * SPOUT_OFFSET.x, this.player.y + SPOUT_OFFSET.y);
+      // spout tip of the tilted can, mirrored AND scaled with the sprite
+      em.setPosition(
+        this.player.x + dir * SPOUT_OFFSET.x * this.player.scaleX,
+        this.player.y + SPOUT_OFFSET.y * this.player.scaleY
+      );
       em.start();
       this.pourSplashTimer = this.time.addEvent({
         delay: 130,
@@ -1788,7 +1848,77 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       this.burstRipples.push({ t0: this.time.now });
       this.time.delayedCall(160, () => this.burstRipples.push({ t0: this.time.now }));
     }
+    this.splashBurst.explode(14, p.x, p.y - 2);
     this.sparkles.explode(16, p.x, p.y - 34);
+    this.time.delayedCall(180, () => this.sparkles.explode(8, p.x, p.y - 48));
+  }
+
+  /** The plant drinks: a squash, a tall happy stretch, then settle. */
+  private drinkGulp(i: number) {
+    const img = this.plotNodes[i]?.img;
+    if (!img) return;
+    this.tweens.killTweensOf(img);
+    img.setAngle(0).setScale(1);
+    this.tweens.chain({
+      targets: img,
+      tweens: [
+        { scaleX: 1.12, scaleY: 0.86, duration: 110, ease: "Sine.easeOut" },
+        { scaleX: 0.94, scaleY: 1.14, duration: 150, ease: "Sine.easeInOut" },
+        { scaleX: 1, scaleY: 1, duration: 220, ease: "Back.easeOut" },
+        { angle: { from: -4, to: 4 }, duration: 110, yoyo: true, repeat: 2 },
+        { angle: 0, duration: 60 },
+      ],
+    });
+  }
+
+  /** A dark, glistening patch soaks into the soil and dries away. */
+  private wetSoil(i: number) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    const g = this.add.graphics().setDepth(YARD + p.y - 0.7).setAlpha(0);
+    g.fillStyle(0x2e5e8a, 0.32);
+    g.fillEllipse(p.x, p.y + 4, 66, 24);
+    g.fillStyle(0x9fd4f0, 0.25);
+    g.fillEllipse(p.x - 12, p.y + 1, 22, 7);
+    this.tweens.chain({
+      targets: g,
+      tweens: [
+        { alpha: 1, duration: 260, ease: "Sine.easeOut" },
+        { alpha: 0, duration: 2600, delay: 900, ease: "Sine.easeIn" },
+      ],
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  /** "+N" pops out of the plant and floats up to bank itself. */
+  private rewardFloat(i: number, dew: number) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    const label = this.add
+      .text(p.x, p.y - 70, `+${dew}`, {
+        fontFamily: "Trebuchet MS, sans-serif",
+        fontSize: "26px",
+        fontStyle: "bold",
+        color: "#eaf7ff",
+        stroke: "#2f7c9e",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(965)
+      .setScale(0.2)
+      .setAlpha(0);
+    const drop = this.add.image(p.x + 26, p.y - 66, "hint")
+      .setDepth(965).setScale(0.28).setAlpha(0);
+    this.tweens.add({
+      targets: [label, drop], alpha: 1, scale: { from: 0.2, to: 1 },
+      duration: 260, ease: "Back.easeOut",
+      onComplete: () => {
+        this.tweens.add({
+          targets: [label, drop],
+          y: "-=46", alpha: 0, duration: 950, delay: 320, ease: "Sine.easeIn",
+          onComplete: () => { label.destroy(); drop.destroy(); },
+        });
+      },
+    });
+    this.tweens.add({ targets: drop, scale: 0.34, duration: 260, ease: "Back.easeOut" });
   }
 
   private happyWiggle(i: number) {
