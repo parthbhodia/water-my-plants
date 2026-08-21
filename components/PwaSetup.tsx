@@ -14,6 +14,7 @@ type InstallPrompt = Event & {
 export default function PwaSetup() {
   const [prompt, setPrompt] = useState<InstallPrompt | null>(null);
   const [dismissed, setDismissed] = useState(true);
+  const [ios, setIos] = useState(false);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -24,6 +25,14 @@ export default function PwaSetup() {
     } catch {
       setDismissed(false);
     }
+    // iOS never fires beforeinstallprompt — Safari users must be shown the way
+    const ua = window.navigator.userAgent;
+    const isIos = /iPad|iPhone|iPod/.test(ua) ||
+      (ua.includes("Macintosh") && "ontouchend" in document);
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+    setIos(isIos && !standalone);
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setPrompt(e as InstallPrompt);
@@ -32,7 +41,7 @@ export default function PwaSetup() {
     return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, []);
 
-  if (!prompt || dismissed) return null;
+  if (dismissed || (!prompt && !ios)) return null;
 
   const close = () => {
     setDismissed(true);
@@ -44,18 +53,27 @@ export default function PwaSetup() {
       <span className="install-icon">🌸</span>
       <div className="install-text">
         <b>Keep your garden on your home screen</b>
-        <span>One tap to water, and reminders can reach you.</span>
+        {prompt ? (
+          <span>One tap to water, and reminders can reach you.</span>
+        ) : (
+          <span>
+            Tap <b className="ios-share" aria-label="the Share button">⎋</b> Share, then{" "}
+            <b>&ldquo;Add to Home Screen&rdquo;</b> — it opens full screen like an app.
+          </span>
+        )}
       </div>
-      <button
-        className="btn small"
-        onClick={async () => {
-          await prompt.prompt();
-          await prompt.userChoice;
-          close();
-        }}
-      >
-        Add
-      </button>
+      {prompt && (
+        <button
+          className="btn small"
+          onClick={async () => {
+            await prompt.prompt();
+            await prompt.userChoice;
+            close();
+          }}
+        >
+          Add
+        </button>
+      )}
       <button className="install-close" onClick={close} aria-label="Not now">✕</button>
     </div>
   );

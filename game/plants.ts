@@ -38,6 +38,25 @@ function palette(sp: SpeciesDef, look: PlantLook): Pal {
 
 // ---------- shared early stages ----------
 
+/** A tiny contented face — full blooms only, so joy reads as earned. */
+function bloomFace(c: Ctx, x: number, y: number, s: number, ink = "rgba(60,38,20,0.85)") {
+  c.save();
+  c.translate(x, y);
+  c.strokeStyle = ink;
+  c.lineWidth = Math.max(1.1, s * 0.16);
+  c.lineCap = "round";
+  // closed, delighted eyes
+  c.beginPath(); c.arc(-s * 0.55, -s * 0.15, s * 0.32, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
+  c.beginPath(); c.arc(s * 0.55, -s * 0.15, s * 0.32, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
+  // little smile
+  c.beginPath(); c.arc(0, s * 0.25, s * 0.4, Math.PI * 0.15, Math.PI * 0.85); c.stroke();
+  // blush
+  c.fillStyle = "rgba(240,130,120,0.4)";
+  ell(c, -s * 0.85, s * 0.25, s * 0.24, s * 0.16); c.fill();
+  ell(c, s * 0.85, s * 0.25, s * 0.24, s * 0.16); c.fill();
+  c.restore();
+}
+
 function drawSeed(c: Ctx, p: Pal) {
   c.fillStyle = "rgba(30,60,40,0.32)";
   ell(c, 0, 2, 10, 3.5); c.fill();
@@ -113,6 +132,7 @@ function formPad(c: Ctx, p: Pal, t: number, stage: number) {
     }
     c.fillStyle = rgrad(c, -1, -1, 9, [[0, "#fff2bf"], [0.6, "#ffd76e"], [1, "#eaa93e"]]);
     ell(c, 0, 0, 7.5, 7.5); c.fill();
+    bloomFace(c, 0, 0.5, 4.6);
     c.restore();
   }
 }
@@ -151,6 +171,7 @@ function formTall(c: Ctx, p: Pal, t: number, stage: number) {
       ell(c, 0, 0, r * 0.62, r * 0.62); c.fill();
       c.fillStyle = "rgba(255,220,150,0.25)";
       ell(c, -r * 0.2, -r * 0.2, r * 0.22, r * 0.22); c.fill();
+      bloomFace(c, 0, 1, r * 0.34, "rgba(255,228,170,0.9)");
     } else {
       c.fillStyle = rgrad(c, -2, -3, r * 1.4, [[0, p.leaf], [1, p.leafDark]]);
       ell(c, 0, 0, r, r * 1.1); c.fill();
@@ -360,8 +381,13 @@ function formBush(c: Ctx, p: Pal, t: number, stage: number) {
         ripe ? [[0, "#ff8a72"], [0.55, p.accent], [1, p.accent2]]
              : [[0, "#a8d08a"], [1, "#6f9c52"]]);
       ell(c, d * 12, fy, r, r); c.fill();
+      if (ripe) {
+        c.fillStyle = "rgba(255,255,255,0.5)";
+        ell(c, d * 12 - r * 0.35, fy - r * 0.4, r * 0.3, r * 0.2); c.fill();
+      }
       c.fillStyle = p.leafDark;
       ell(c, d * 12, fy - r * 0.85, 2.6, 1.4); c.fill();
+      if (stage === 6 && i === 0) bloomFace(c, d * 12, fy + r * 0.1, r * 0.55, "rgba(120,30,20,0.8)");
     }
   }
 }

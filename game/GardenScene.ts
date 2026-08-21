@@ -617,6 +617,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
     // ---- tree trunk + canopy (2x) ----
     this.ctex("trunk", 72, 150, (c) => {
+      // kept name/size; drawn chunkier below
       c.scale(2, 2);
       c.fillStyle = lg(c, 8, 0, 30, 0, [[0, "#9b7350"], [0.5, "#82593a"], [1, "#63422a"]]);
       c.beginPath();
@@ -630,16 +631,27 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     });
     this.ctex("canopy", 300, 280, (c) => {
       c.scale(2, 2);
+      // chunky leaf clusters, each with its own crescent highlight and
+      // shaded underside, so the crown reads as bunches rather than a blob
       const orb = (x: number, y: number, r: number, l = 0) => {
-        c.fillStyle = rgrad(c, x - r * 0.35, y - r * 0.4, r * 1.5, [
-          [0, l ? "#a6dfa0" : "#8ed489"], [0.55, l ? "#74c47c" : "#5cb46a"], [1, l ? "#4c9c5c" : "#3c8a4e"]]);
+        c.fillStyle = rgrad(c, x - r * 0.35, y - r * 0.4, r * 1.6, [
+          [0, l ? "#b2e6a8" : "#96d98e"], [0.55, l ? "#74c47c" : "#57b166"], [1, l ? "#478f56" : "#357f47"]]);
         ell(c, x, y, r, r); c.fill();
+        // underside shade
+        c.fillStyle = "rgba(24,70,40,0.28)";
+        c.beginPath(); c.ellipse(x, y + r * 0.45, r * 0.85, r * 0.42, 0, 0, Math.PI); c.fill();
+        // crescent highlight
+        c.fillStyle = "rgba(235,255,220,0.5)";
+        c.beginPath();
+        c.ellipse(x - r * 0.25, y - r * 0.45, r * 0.5, r * 0.28, -0.5, 0, Math.PI * 2);
+        c.fill();
       };
-      c.fillStyle = "rgba(30,80,45,0.25)"; ell(c, 76, 92, 62, 48); c.fill();
-      orb(46, 90, 34); orb(106, 90, 36); orb(75, 56, 40, 1); orb(42, 62, 26, 1); orb(110, 60, 27);
-      // dapples
-      c.fillStyle = "rgba(230,255,220,0.35)";
-      for (const [dx, dy, dr] of [[62, 44, 7], [86, 38, 5], [40, 76, 5], [116, 76, 6], [76, 70, 4]] as const) {
+      c.fillStyle = "rgba(30,80,45,0.3)"; ell(c, 76, 96, 64, 46); c.fill();
+      orb(34, 92, 26); orb(118, 92, 27); orb(52, 98, 30); orb(100, 100, 31);
+      orb(40, 62, 27, 1); orb(112, 60, 27); orb(75, 44, 34, 1); orb(75, 82, 36);
+      // sparkle dapples
+      c.fillStyle = "rgba(240,255,225,0.55)";
+      for (const [dx, dy, dr] of [[60, 36, 4.5], [92, 32, 3.5], [30, 70, 3.5], [124, 74, 4], [78, 64, 3]] as const) {
         ell(c, dx, dy, dr, dr); c.fill();
       }
     });
@@ -648,13 +660,17 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.ctex("bush", 220, 110, (c) => {
       c.scale(2, 2);
       const orb = (x: number, y: number, r: number, l = 0) => {
-        c.fillStyle = rgrad(c, x - r * 0.3, y - r * 0.45, r * 1.5, [
-          [0, l ? "#9ed898" : "#7cc97e"], [0.6, "#54ab62"], [1, "#3d8a4e"]]);
+        c.fillStyle = rgrad(c, x - r * 0.3, y - r * 0.45, r * 1.6, [
+          [0, l ? "#aade9e" : "#84cf84"], [0.6, "#54ab62"], [1, "#357f47"]]);
         ell(c, x, y, r, r * 0.9); c.fill();
+        c.fillStyle = "rgba(24,70,40,0.25)";
+        c.beginPath(); c.ellipse(x, y + r * 0.4, r * 0.8, r * 0.36, 0, 0, Math.PI); c.fill();
+        c.fillStyle = "rgba(235,255,225,0.5)";
+        c.beginPath(); c.ellipse(x - r * 0.25, y - r * 0.4, r * 0.45, r * 0.24, -0.5, 0, Math.PI * 2); c.fill();
       };
-      orb(28, 38, 20); orb(82, 40, 22); orb(55, 28, 22, 1);
-      c.fillStyle = "rgba(235,255,230,0.4)";
-      ell(c, 48, 20, 5, 4); c.fill(); ell(c, 66, 26, 4, 3); c.fill();
+      orb(24, 40, 18); orb(86, 42, 19); orb(44, 44, 21); orb(68, 44, 21); orb(55, 26, 22, 1);
+      c.fillStyle = "rgba(240,255,230,0.55)";
+      ell(c, 48, 18, 4, 3.2); c.fill(); ell(c, 68, 24, 3.2, 2.6); c.fill();
     });
     this.ctex("rock", 100, 64, (c) => {
       c.scale(2, 2);
