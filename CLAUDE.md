@@ -101,8 +101,13 @@ adaptation, and hold to these rules:
   gesture as scroll/zoom and Phaser never sees the tap — the canvas looks
   alive but nothing responds.
 - **The scene must not draw under React chrome.** `bridge.setBottomInset(px)`
-  reports how much of the screen the pull-up sheet covers; the camera
-  viewport shrinks to match, so plots can never hide beneath it.
+  reports the height of the sheet's *collapsed grab handle* only; the camera
+  viewport shrinks to match, so plots never hide beneath it. Never feed it
+  the expanded sheet height — an open sheet is a temporary overlay, and
+  reserving it squeezed the garden into a sliver.
+- **No user action may leave a lock stuck.** The tend guard
+  (`acting`/`busy`) has a 15s watchdog; without it one hung request killed
+  the Water button silently for the rest of the session.
 - **Touch devices never see keyboard copy** — no W A S D, no "press E".
   Gate on `matchMedia("(pointer: coarse)")`.
 
@@ -113,7 +118,9 @@ panel across three phone viewports and reports horizontal overflow,
 sub-44px tap targets, controls pushed off-screen, and page errors.
 **It must print `0 findings` before shipping UI work.** It also taps a
 plant through the real canvas and asserts the scene registered the hit,
-which is the check that catches gesture regressions. It needs
+which is the check that catches gesture regressions, taps the Water
+button and asserts a pour actually starts, and fails if an open sheet
+reflows the camera. It needs
 `npm run start` on :3000 and the `app/dev-mobile` fixture, which mounts
 every panel with mock state so no login is required. Screenshots land in
 `/tmp/mobile-audit`.

@@ -193,6 +193,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     if (typeof window !== "undefined" && window.location.hostname === "localhost") {
       (window as unknown as Record<string, unknown>).__lilyProbe = () =>
         ({ x: this.player?.x, y: this.player?.y, pouring: this.pouring, target: this.autoTarget });
+      (window as unknown as Record<string, unknown>).__camInset = () => this.bottomInset;
       // where a plot sits on the physical screen — lets tests tap it
       (window as unknown as Record<string, unknown>).__plotScreenPos = (i: number) => {
         const pl = PLOTS[i];

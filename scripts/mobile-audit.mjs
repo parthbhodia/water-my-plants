@@ -130,6 +130,36 @@ for (const d of DEVICES) {
     findings.push(`${d.name}--tap: could not locate a plant on screen (probe=${JSON.stringify(probe)})`);
   }
 
+  // ---- does the Water button actually water? ----
+  await page.evaluate(() => window.__sheet(true));
+  await page.waitForTimeout(700);
+  const camInset = await page.evaluate(() => window.__camInset?.() ?? -1);
+  const overlay = await page.evaluate(() => {
+    const el = document.querySelector(".panel-wrap");
+    return el ? Math.round(window.innerHeight - el.getBoundingClientRect().top) : 0;
+  });
+  // an open sheet is an overlay; it must never reflow the camera
+  if (camInset > 80) {
+    findings.push(`${d.name}--camera: SHEET SQUEEZES STAGE — camera reserves ${camInset}px (overlay covers ${overlay}px)`);
+  }
+  const waterBtn = page.locator(".plot-buttons .btn.blue");
+  if (await waterBtn.count()) {
+    await page.evaluate(() => { window.__poured = null; });
+    await waterBtn.tap();
+    let poured = null;
+    for (let i = 0; i < 12 && !poured; i++) {
+      await page.waitForTimeout(500);
+      poured = await page.evaluate(() => window.__poured);
+    }
+    if (!poured) {
+      findings.push(`${d.name}--water: WATER BUTTON DID NOTHING (no pour after 6s)`);
+      await page.screenshot({ path: `${OUT}/${d.name}--water-fail.png` });
+    }
+  } else {
+    findings.push(`${d.name}--water: no Water button found`);
+  }
+  await page.evaluate(() => window.__sheet(false));
+
   await ctx.close();
 }
 

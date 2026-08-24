@@ -45,13 +45,15 @@ export default function DevMobile() {
   const [tab, setTab] = useState<PanelTab>("garden");
   const [modal, setModal] = useState<null | "seed" | "journal" | "tutorial">(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sel, setSel] = useState(0);
   useEffect(() => {
     bridge.setAvatar(DEFAULT_AVATAR);
     bridge.setGarden(STATE);
     const measure = () => {
       const el = document.querySelector(".panel-wrap") as HTMLElement | null;
       if (!el || getComputedStyle(el).position !== "fixed") return bridge.setBottomInset(0);
-      bridge.setBottomInset(Math.max(0, window.innerHeight - el.getBoundingClientRect().top));
+      const handle = el.querySelector(".sheet-handle") as HTMLElement | null;
+      bridge.setBottomInset(handle?.offsetHeight ?? 46);
     };
     measure();
     const t = setTimeout(measure, 350);
@@ -62,7 +64,17 @@ export default function DevMobile() {
     w.__modal = (m: string | null) => setModal(m as never);
     w.__sheet = (o: boolean) => setSheetOpen(o);
     w.__tapped = null;
+    w.__poured = null;
     bridge.onPlotTapped = (i) => { w.__tapped = i; };
+    bridge.onPourStart = (plotIdx, action) => {
+      w.__poured = { plotIdx, action };
+      setTimeout(() => {
+        bridge.applyOutcome({
+          status: "watered", grew: true, dewEarned: 4, plotIdx,
+          species: STATE.plots[plotIdx]?.plant?.species ?? "lily",
+        });
+      }, 700);
+    };
 
     return () => { clearTimeout(t); window.removeEventListener("resize", measure); };
   }, [bridge, sheetOpen]);
@@ -82,8 +94,8 @@ export default function DevMobile() {
             {tab === "garden" && (
               <>
                 <NextStep state={STATE} onGo={(_i, plant) => plant && setModal("seed")} />
-                <PlotBar state={STATE} selected={0} busy={false}
-                  onSelect={()=>{}} onTend={()=>{}} onPlant={()=>setModal("seed")} onClear={()=>{}} onRevive={()=>{}} />
+                <PlotBar state={STATE} selected={sel} busy={false}
+                  onSelect={(i)=>setSel(i)} onTend={(i,a)=>bridge.tend(i,a)} onPlant={()=>setModal("seed")} onClear={()=>{}} onRevive={()=>{}} />
                 <RestorePanel state={STATE} onState={()=>{}} showToast={()=>{}} />
               </>
             )}

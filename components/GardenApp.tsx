@@ -58,6 +58,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   useEffect(() => { guidedRef.current = guided; }, [guided]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acting = useRef(false);
+  const actingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((msg: string, ms = 5600, mood: GuideMood = "happy") => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -116,11 +117,13 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     const measure = () => {
       const el = document.querySelector(".panel-wrap") as HTMLElement | null;
       if (!el) return bridge.setBottomInset(0);
-      const style = getComputedStyle(el);
       // only the fixed sheet overlaps the stage; the desktop panel does not
-      if (style.position !== "fixed") return bridge.setBottomInset(0);
-      const covered = window.innerHeight - el.getBoundingClientRect().top;
-      bridge.setBottomInset(Math.max(0, Math.min(covered, window.innerHeight * 0.55)));
+      if (getComputedStyle(el).position !== "fixed") return bridge.setBottomInset(0);
+      // Reserve only the collapsed grab handle. Pulling the sheet up is a
+      // temporary overlay — reflowing the camera for it squeezed the garden
+      // into a sliver.
+      const handle = el.querySelector(".sheet-handle") as HTMLElement | null;
+      bridge.setBottomInset(handle?.offsetHeight ?? 46);
     };
     measure();
     const t = setTimeout(measure, 350); // after the sheet transition
@@ -131,7 +134,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       window.removeEventListener("resize", measure);
       window.removeEventListener("orientationchange", measure);
     };
-  }, [bridge, sheetOpen, state]);
+  }, [bridge, state]);
 
   // The gardener should not wander behind an open modal.
   useEffect(() => {
@@ -145,6 +148,15 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       if (acting.current) return;
       acting.current = true;
       setBusy(true);
+      // A request that never settles must not disable the garden forever.
+      if (actingTimer.current) clearTimeout(actingTimer.current);
+      actingTimer.current = setTimeout(() => {
+        if (!acting.current) return;
+        acting.current = false;
+        setBusy(false);
+        bridge.applyOutcome({ status: "error" });
+        showToast("That took too long — the garden lost its connection. Try again.", 6000, "worry");
+      }, 15000);
       sfx.pour();
       try {
         const { data, error } = await supabase.rpc("tend_plant", {
@@ -178,12 +190,14 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           } else {
             showToast(tendMessage(result, state?.displayName), 5600, tendMood(result));
           }
+          if (actingTimer.current) clearTimeout(actingTimer.current);
           acting.current = false;
           setBusy(false);
         }, 850);
       } catch (e) {
         bridge.applyOutcome({ status: "error" });
         showToast("The watering can sprang a leak (network error). Try again!", 5600, "worry");
+        if (actingTimer.current) clearTimeout(actingTimer.current);
         acting.current = false;
         setBusy(false);
         void e;
