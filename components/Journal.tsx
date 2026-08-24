@@ -3,6 +3,7 @@
 import { SPECIES, careSummary, PLOT_LABEL } from "@/lib/species";
 import type { CompletedLily, GardenState } from "@/lib/types";
 import PlantIcon from "./PlantIcon";
+import VariantCollection from "./VariantCollection";
 
 export default function Journal({
   state,
@@ -41,6 +42,8 @@ export default function Journal({
             );
           })}
         </div>
+
+        <VariantCollection />
 
         <div className="gallery">
           <h3>🌸 Harvest record</h3>

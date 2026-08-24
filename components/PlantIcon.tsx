@@ -11,12 +11,14 @@ export default function PlantIcon({
   size = 34,
   wilted,
   dead,
+  variant,
 }: {
   species: string | SpeciesDef;
   stage?: number;
   size?: number;
   wilted?: boolean;
   dead?: boolean;
+  variant?: string | null;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -40,9 +42,9 @@ export default function PlantIcon({
     c.save();
     c.scale(scale, scale);
     c.translate(box / 2, box * 0.92);
-    drawPlant(c, sp, { stage, wilted, dead });
+    drawPlant(c, sp, { stage, wilted, dead, variant });
     c.restore();
-  }, [species, stage, size, wilted, dead]);
+  }, [species, stage, size, wilted, dead, variant]);
 
   return <canvas ref={ref} className="plant-icon" />;
 }

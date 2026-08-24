@@ -12,6 +12,7 @@ export interface SceneApi {
   focusPlot(i: number, zoomMul?: number): void;
   setBottomInset(px: number): void;
   celebrateRound(count: number): void;
+  celebrateLevel(level: number): void;
   setCombo(n: number): void;
   releaseFocus(): void;
 }
@@ -25,6 +26,8 @@ export class GameBridge {
 
   /** React sets these */
   onPourStart: ((plotIdx: number, action: TendAction) => void) | null = null;
+  /** Fires when a "+N" reward finishes its flight into the wallet counter. */
+  onDewBanked: ((dew: number) => void) | null = null;
   onNearPond: ((near: boolean) => void) | null = null;
   onPlotTapped: ((plotIdx: number) => void) | null = null;
 
@@ -69,6 +72,10 @@ export class GameBridge {
   }
 
   /** The whole round finished — confetti over the garden. */
+  celebrateLevel(level: number) {
+    this.sceneApi?.celebrateLevel(level);
+  }
+
   celebrateRound(count: number) {
     this.sceneApi?.celebrateRound(count);
   }

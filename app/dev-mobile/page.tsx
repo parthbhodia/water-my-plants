@@ -20,10 +20,10 @@ import Tutorial from "@/components/Tutorial";
 const GameCanvas = dynamic(() => import("@/components/GameCanvas"), { ssr: false });
 
 const KINDS: PlotState["kind"][] = ["water","sun","shade","sun","water","shade","sun","water","shade","sun","sun","shade"];
-const mk = (species: string, idx: number, stage: number): PlantState => ({
+const mk = (species: string, idx: number, stage: number, variant: string | null = null): PlantState => ({
   id: species+idx, plotIdx: idx, species, stage, growth: stage, watersNeeded: 7,
   feedsDone: 0, prunesDone: 0, plantedOn: "2026-08-13", lastCareOn: null, dayNumber: stage+1,
-  overdueDays: 0, thirsty: true, wilted: false, health: 1, dead: false, isBloomed: false, streak: 3,
+  overdueDays: 0, thirsty: true, wilted: false, health: 1, dead: false, isBloomed: false, variant, streak: 3,
 });
 const STATE = {
   gardenId:"g", gardenName:"My Garden", plotCount:6, displayName:"SunnyBud12", friendCode:"LILY-42AB",
@@ -39,8 +39,8 @@ const STATE = {
   ],
   unlockedSpecies:["lily","sunflower","fern","cactus"], gardenScore:68, completedCount:2,
   plots: KINDS.map((kind, idx) => ({ idx, kind, unlocked: idx<6,
-    plant: idx===0 ? mk("lily",0,4) : idx===1 ? mk("sunflower",1,5)
-         : idx===2 ? mk("fern",2,3) : idx===3 ? mk("cactus",3,2) : null })),
+    plant: idx===0 ? mk("lily",0,4,"dewkissed") : idx===1 ? mk("sunflower",1,5,"golden")
+         : idx===2 ? mk("fern",2,3) : idx===3 ? mk("cactus",3,2,"variegated") : null })),
 } as GardenState;
 
 export default function DevMobile() {

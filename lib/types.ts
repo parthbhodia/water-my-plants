@@ -18,6 +18,7 @@ export type PlantState = {
   health: number;
   dead: boolean;
   isBloomed: boolean;
+  variant: string | null;
   streak: number;
 };
 
@@ -90,6 +91,7 @@ export type TendResult = {
   nextDue?: string;
   readyAt?: string;
   item?: string;
+  variant?: string | null;
   windowStart?: number | null;
   windowEnd?: number | null;
   state?: GardenState;
@@ -102,6 +104,7 @@ export type CompletedLily = {
   perfect: boolean;
   completed_at: string;
   species_id: number | null;
+  variant: string | null;
 };
 
 export type LeagueMember = {
@@ -128,6 +131,17 @@ export type LeagueState = {
   relegateFrom: number | null;
   members: LeagueMember[];
   lastSeason: { rank: number; movement: number; tierName: string } | null;
+};
+
+export type CareMark = "full" | "partial" | "rest" | "missed" | "future";
+
+export type CareWeek = {
+  seasonNumber: number;
+  startsOn: string;
+  marks: Array<{ day: string; weekday: string; mark: CareMark }>;
+  metDays: number;
+  tended: number;
+  score: number;
 };
 
 export type HofEntry = {

@@ -65,6 +65,22 @@ class Sfx {
 
   wiggle() { this.tone(392, 0.1, "triangle", 0.09); this.tone(494, 0.1, "triangle", 0.09, 0.09); }
 
+  /** The splash again, but a whole step brighter for each plant in the round. */
+  comboSplash(n: number) {
+    const step = Math.pow(2, Math.min(n, 8) / 12);
+    this.tone(300 * step, 0.2, "sine", 0.12, 0, 120 * step);
+    this.tone(900 * step, 0.08, "triangle", 0.06, 0.02);
+    if (n >= 2) this.tone(1320 * step, 0.14, "triangle", 0.07, 0.06);
+  }
+
+  /** A gardener level: a warm fanfare that lands, unlike the bloom's climb. */
+  levelUp() {
+    [523, 659, 784].forEach((f, i) => this.tone(f, 0.3, "triangle", 0.13, i * 0.08));
+    this.tone(1047, 0.7, "triangle", 0.14, 0.26);
+    this.tone(1568, 0.5, "sine", 0.07, 0.34);
+    this.tone(262, 1.1, "sine", 0.09, 0.1);
+  }
+
   bloom() {
     [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => this.tone(f, 0.35, "triangle", 0.12, i * 0.12));
     this.tone(262, 1.2, "sine", 0.08, 0.2);

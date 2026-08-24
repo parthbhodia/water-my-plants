@@ -17,6 +17,7 @@ export default function Hud({
   musicOn,
   musicName,
   onSignOut,
+  dewPulse,
 }: {
   state: GardenState;
   muted: boolean;
@@ -29,6 +30,8 @@ export default function Hud({
   musicOn: boolean;
   musicName: string;
   onSignOut: () => void;
+  /** Bumped when a reward lands, so the counter can flash. */
+  dewPulse?: number;
 }) {
   const live = state.plots.filter((p) => p.plant && !p.plant.dead).length;
   const todo = state.plots.filter(
@@ -46,7 +49,7 @@ export default function Hud({
           <button className="stat score tappable" onClick={onLeague} title="View your league">
             <Trophy size={13} strokeWidth={2.6} aria-hidden /> {state.gardenScore}
           </button>
-          <span className="stat dew" title="Dewdrops"><Droplets size={13} strokeWidth={2.6} aria-hidden /> {state.dewdrops}</span>
+          <span className={`stat dew${dewPulse ? " banked" : ""}`} key={`dew-${dewPulse ?? 0}`} title="Dewdrops"><Droplets size={13} strokeWidth={2.6} aria-hidden /> {state.dewdrops}</span>
           {todo > 0 && <span className="stat todo">{todo} need care</span>}
         </div>
       </div>

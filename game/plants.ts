@@ -10,6 +10,8 @@ import type { PlantForm, SpeciesDef } from "@/lib/species";
 export type PlantLook = {
   stage: number;   // 0..6
   wilted?: boolean;
+  /** cosmetic rare variant, if this plant rolled one at bloom */
+  variant?: string | null;
   dead?: boolean;
 };
 
@@ -510,6 +512,88 @@ const FORMS: Record<PlantForm, (c: Ctx, p: Pal, t: number, stage: number) => voi
  * Draws a plant at the current canvas origin, growing upward.
  * Stages 0–1 are shared (seed, sprout); 2–6 are species-specific.
  */
+/** Cosmetic overlay for a rare variant. Applied once, after the species
+ *  painter, so all eight forms inherit it without eight separate edits. */
+function paintVariant(c: Ctx, variant: string, stage: number) {
+  if (stage < 3) return; // too small to read; let it show as it fills out
+  const spread = 26 + stage * 7;
+  c.save();
+  if (variant === "dewkissed") {
+    // beads of dew catching the light
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + 0.4;
+      const r = spread * (0.4 + ((i * 7) % 5) / 9);
+      const bx = Math.cos(a) * r;
+      const by = -spread * 0.7 + Math.sin(a) * r * 0.6;
+      c.fillStyle = "rgba(150,220,255,0.55)";
+      ell(c, bx, by + 0.7, 3.6, 3.6); c.fill();
+      c.fillStyle = "rgba(232,250,255,0.95)";
+      ell(c, bx, by, 3, 3); c.fill();
+      c.fillStyle = "rgba(255,255,255,1)";
+      ell(c, bx - 1, by - 1.1, 1.1, 1.1); c.fill();
+    }
+  } else if (variant === "variegated") {
+    // cream streaks brushed through the foliage
+    c.globalAlpha = 0.85;
+    c.lineCap = "round";
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + 0.3;
+      const x = Math.cos(a) * spread * 0.52;
+      const y = -spread * 0.7 + Math.sin(a) * spread * 0.4;
+      c.strokeStyle = "#fffdf0";
+      c.lineWidth = 4.2;
+      c.beginPath();
+      c.moveTo(x - 5.5, y - 3.5);
+      c.quadraticCurveTo(x, y, x + 6.5, y + 3.5);
+      c.stroke();
+      c.strokeStyle = "#f6e6a8";
+      c.lineWidth = 1.6;
+      c.beginPath();
+      c.moveTo(x - 5.5, y - 3.5);
+      c.quadraticCurveTo(x, y, x + 6.5, y + 3.5);
+      c.stroke();
+    }
+    c.globalAlpha = 1;
+  } else if (variant === "moonlit") {
+    // a pale halo that lingers
+    c.fillStyle = rgrad(c, 0, -spread * 0.7, spread * 1.15, [
+      [0, "rgba(220,212,255,0.42)"], [0.6, "rgba(200,190,255,0.16)"], [1, "rgba(200,190,255,0)"]]);
+    ell(c, 0, -spread * 0.7, spread * 1.15, spread * 0.95);
+    c.fill();
+    c.fillStyle = "rgba(238,234,255,0.85)";
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      ell(c, Math.cos(a) * spread * 0.8, -spread * 0.7 + Math.sin(a) * spread * 0.5, 1.4, 1.4);
+      c.fill();
+    }
+  } else if (variant === "golden") {
+    // gilt edging plus a warm glow
+    c.fillStyle = rgrad(c, 0, -spread * 0.7, spread * 1.2, [
+      [0, "rgba(255,215,110,0.34)"], [0.65, "rgba(255,196,70,0.12)"], [1, "rgba(255,196,70,0)"]]);
+    ell(c, 0, -spread * 0.7, spread * 1.2, spread);
+    c.fill();
+    c.globalAlpha = 0.75;
+    c.strokeStyle = "#ffd76e";
+    c.lineWidth = 1.6;
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + 0.2;
+      const x = Math.cos(a) * spread * 0.62;
+      const y = -spread * 0.7 + Math.sin(a) * spread * 0.44;
+      c.beginPath();
+      c.arc(x, y, 5.5, a - 1.1, a + 1.1);
+      c.stroke();
+    }
+    c.globalAlpha = 1;
+    c.fillStyle = "rgba(255,246,200,0.95)";
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + 0.9;
+      ell(c, Math.cos(a) * spread * 0.5, -spread * 0.85 + Math.sin(a) * spread * 0.3, 1.6, 1.6);
+      c.fill();
+    }
+  }
+  c.restore();
+}
+
 export function drawPlant(c: Ctx, sp: SpeciesDef, look: PlantLook) {
   const p = palette(sp, look);
   const stage = Math.max(0, Math.min(6, look.stage));
@@ -531,6 +615,9 @@ export function drawPlant(c: Ctx, sp: SpeciesDef, look: PlantLook) {
     FORMS[sp.form](c, p, t, stage);
   }
 
+  // a rare variant reads over whatever the species drew
+  if (look.variant && !look.dead) paintVariant(c, look.variant, stage);
+
   c.restore();
 }
 
@@ -543,6 +630,17 @@ const NOMINAL_HEIGHT: Record<PlantForm, number> = {
   pad: 62, tall: 150, frond: 88, succulent: 82,
   vine: 108, bush: 78, orchid: 98, tree: 92,
 };
+
+/**
+ * How tall this form stands in the yard at a given stage, in scene pixels.
+ * The variant dressing orbits the plant's optical centre, and a lily pad and
+ * a sunflower are nothing like the same height — a fixed offset leaves the
+ * effect hanging in mid-air over the short ones.
+ */
+export function plantHeightPx(form: PlantForm, stage: number, spriteScale = 0.5): number {
+  const grown = 0.28 + 0.72 * Math.min(1, Math.max(0, stage) / 6);
+  return NOMINAL_HEIGHT[form] * grown * spriteScale * 2;
+}
 
 /** Sprite scale that renders `form` at about `targetPx` tall. */
 export function bloomScale(form: PlantForm, targetPx = 300): number {

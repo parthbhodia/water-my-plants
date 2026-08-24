@@ -26,6 +26,7 @@ import TodayBrief from "./TodayBrief";
 import DecorBar from "./DecorBar";
 import RestorePanel from "./RestorePanel";
 import NextStep from "./NextStep";
+import PlantCard from "./PlantCard";
 import WaterFab from "./WaterFab";
 import WeeklyGift from "./WeeklyGift";
 import Tutorial from "./Tutorial";
@@ -64,6 +65,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   useEffect(() => { roundRef.current = round; }, [round]);
   useEffect(() => { guidedRef.current = guided; }, [guided]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // bumped each time a reward finishes its flight into the counter
+  const [dewPulse, setDewPulse] = useState(0);
   const acting = useRef(false);
   const actingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -73,14 +76,32 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     toastTimer.current = setTimeout(() => setToast(null), ms);
   }, []);
 
+  /**
+   * Crossing a gardener level is the slowest reward in the game and it used to
+   * happen invisibly — the number in the Hall of Fame simply differed the next
+   * time you looked. Every path that lands new state runs through here, so
+   * this is the one place that can notice.
+   */
+  const levelRef = useRef<number | null>(null);
+
   const applyState = useCallback(
     (s: GardenState) => {
+      const prev = levelRef.current;
+      levelRef.current = s.level;
       stateRef.current = s;
       setState(s);
       bridge.setGarden(s);
       setBriefKey((k) => k + 1);
+      if (prev !== null && s.level > prev) {
+        sfx.levelUp();
+        bridge.celebrateLevel(s.level);
+        showToast(
+          `Level ${s.level}, ${s.displayName?.split(" ")[0] ?? "love"}. All that quiet tending adds up.`,
+          7000, "proud"
+        );
+      }
     },
-    [bridge]
+    [bridge, showToast]
   );
 
   // ---- initial load ----
@@ -160,6 +181,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
         bridge.tend(i, "water");
       }
     };
+    bridge.onDewBanked = () => setDewPulse((n) => n + 1);
     bridge.onPourStart = async (plotIdx, action) => {
       if (acting.current) return;
       acting.current = true;
@@ -183,9 +205,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
         const result = data as TendResult;
         setTimeout(() => {
           bridge.applyOutcome(result);
-          if (result.state) { stateRef.current = result.state; setState(result.state); }
+          if (result.state) applyState(result.state);
           if (result.status === "watered" || result.status === "fed" || result.status === "pruned") {
-            sfx.splash();
+            sfx.comboSplash(Math.max(0, roundTotal.current - roundRef.current.length));
             if (result.bloomedNow) sfx.bloom();
             else if (result.grew) sfx.grow();
           } else {
@@ -245,6 +267,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     };
     return () => {
       bridge.onPourStart = null;
+      bridge.onDewBanked = null;
       bridge.onPlotTapped = null;
     };
   }, [bridge, supabase, showToast]);
@@ -450,6 +473,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             musicOn={musicOn}
             musicName={MUSIC_MODES.find((m) => m.key === musicMode)?.name ?? ""}
             onSignOut={signOut}
+            dewPulse={dewPulse}
           />
         )}
 
@@ -522,6 +546,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
                 }}
               />
             )}
+            {tab === "garden" && <PlantCard state={state} selected={selected} />}
             {tab === "garden" && (
               <PlotBar
                 state={state}

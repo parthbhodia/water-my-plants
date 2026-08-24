@@ -142,6 +142,75 @@ Never kill a plant's tweens by walking `getTweensOf(...)` — chained
 animations (the drink gulp) break mid-flight and throw. Track long-lived
 tweens explicitly, like `shivers`.
 
+## Scoring: consistency, not accumulation
+
+The weekly league ranks on **met care days**, never on how much you own.
+`compute_consistency_score` = `met_days * 100 + total_tended` — the primary
+term caps at 7 for everyone, so a two-plant newcomer and a twelve-plant
+veteran play for the same ceiling and the tiebreak keeps the bigger garden
+meaningfully ahead on equal consistency. `care_day_counts()` reconstructs
+each day's verdict from `care_logs`, so there is no verdict table, no cron
+and no backfill to keep in sync.
+
+A day where nothing was due is a **rest day** — neither scored nor
+penalised. That is what stops a cactus-only garden farming easy perfect days.
+
+**`compute_garden_score` is deliberately untouched.** It still powers
+`garden_value()` and the all-time Hall of Fame boards, which never reset.
+Nothing a player earned is ever taken away — only the *weekly* board, which
+always reset by design, changed what it measures.
+
+## Rare variants are alive, not painted on
+
+Variants roll server-side at bloom (`roll_variant`, ~8% base and ~3x that
+when `missed_days = 0` — perfect care is what pays). They render in two
+places and the split matters:
+
+- **Baked** into the plant texture by `paintVariant()` in `game/plants.ts`,
+  for every static context (chips, journal, almanac).
+- **Live** in the scene via `syncVariantFx()` / `stepVariantFx()` in
+  `game/GardenScene.ts` — haloes, sweeping sheens, dripping beads and
+  orbiting motes.
+
+The motes orbit an ellipse and **swap depth as they cross behind the plant**
+(`base ± 0.9`), dimming on the far side. Occlusion plus aerial perspective is
+the only thing that reads as depth on a flat canvas — that crossover is the
+whole trick, so do not flatten it to a single depth.
+
+Anchor everything to `plantHeightPx(form, stage)`. A lily pad and a
+sunflower differ threefold in height; a fixed offset leaves the dressing
+hanging in the sky above the short ones.
+
+## Reward beats: every act of care lands
+
+Nothing a player earns may happen silently.
+
+- **A pour**: splash + drink gulp + wet soil + two burst rings + a camera
+  punch that scales with the combo + `comboSplash(n)`, pitched a semitone
+  higher per plant in the round.
+- **A stage** (a week of somebody's life): soil puff, a spring that
+  overshoots and settles elastically, a green ring, and a `Stage N of 7`
+  ribbon with pips — because growth you cannot see on the plant still has to
+  be felt.
+- **A gardener level**: `celebrateLevel()`. This used to happen in total
+  silence — the number in the Hall of Fame simply differed next time you
+  looked. `applyState` is the single place that can notice, so **every path
+  that lands new state must go through it**, never a bare `setState`.
+- **Dewdrops**: the `+N` flies to the wallet counter and pulses it
+  (`onDewBanked`), so earning and balance read as one event.
+
+## Explaining the plant, not just the rule
+
+`components/PlantCard.tsx` shows the selected plant's contract in plain
+words, and `lib/plantfacts.ts` gives the *reason* behind each rule plus a
+true botanical aside. A care contract a player understands is one they can
+plan around.
+
+The overwater warning arrives **before** the action, never as a toast after
+it. Tapping a plant that cannot drink only selects it, and `WaterFab` routes
+to a plant that can — so the UI cannot rot a cactus. The card explains why
+the button is pointing elsewhere.
+
 ## Guiding a lost player
 
 A player should never wonder what to do next:

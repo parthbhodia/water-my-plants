@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import type { HallOfFame, HofEntry, LeagueState } from "@/lib/types";
+import CareWeek from "./CareWeek";
 import AvatarPreview from "./AvatarPreview";
 import FriendsPanel from "./FriendsPanel";
 
@@ -80,10 +81,12 @@ export default function Leaderboard({ showToast }: { showToast: (m: string) => v
                   </div>
                 </div>
 
+                <CareWeek />
+
                 <p className="journal-sub">
-                  Ranked against {league.size} gardener{league.size === 1 ? "" : "s"} on a similar
-                  clock. Only this ranking resets on Monday — your garden, blooms and streaks are
-                  yours forever.
+                  Ranked on the days you gave every plant what it needed — not on how much you
+                  own, so a new garden can win. Only this ranking resets on Monday; your garden,
+                  blooms and streaks are yours forever.
                   {league.promoteN > 0
                     ? ` Top ${league.promoteN} promote${
                         league.relegateFrom ? `, bottom ${league.size - league.relegateFrom + 1} relegate` : ""

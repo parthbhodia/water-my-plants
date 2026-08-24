@@ -1,10 +1,11 @@
 import * as Phaser from "phaser";
 import type { GameBridge, SceneApi } from "./bridge";
 import type { GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
-import { drawPlant, bloomScale } from "./plants";
+import { drawPlant, bloomScale, plantHeightPx } from "./plants";
 import { SPECIES_BY_KEY } from "@/lib/species";
 import { DECOR_SLOTS, drawDecor, drawKoi } from "./decor";
 import { FIXTURES, ZONE_FOG, FIX_W, FIX_H, FIX_BX, FIX_BY } from "./fixtures";
+import { VARIANT_BY_KEY } from "@/lib/variants";
 import { type Ctx, type Stop, lg, rgrad, rr, ell, blob, petalPath } from "./draw";
 import {
   type Avatar,
@@ -90,6 +91,17 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private garden: GardenState | null = null;
 
   private skyTex!: Phaser.Textures.CanvasTexture;
+  /**
+   * Live variant dressing, one entry per plot. Motes orbit on an ellipse and
+   * swap depth as they cross behind the plant — occlusion is what sells depth
+   * on a flat canvas, so the orbit is the whole trick.
+   */
+  private variantFx: Array<{
+    key: string;
+    objs: Phaser.GameObjects.GameObject[];
+    motes: Array<{ o: Phaser.GameObjects.Image; phase: number; rx: number; ry: number; cy: number; sp: number }>;
+    plot: number;
+  } | null> = [];
   private plotNodes: Array<{
     tex: Phaser.Textures.CanvasTexture;
     img: Phaser.GameObjects.Image;
@@ -322,6 +334,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.updatePlotPips(time);
     this.updateKoi(time);
     this.updateCritters(time);
+    this.stepVariantFx(time);
   }
 
   // ================= bridge api =================
@@ -439,7 +452,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       this.celebrateWater(idx, this.comboCount);
       if (r.dewEarned) this.rewardFloat(idx, r.dewEarned);
       if (r.grew) this.stagePop(idx);
-      if (r.bloomedNow) this.celebrateBloom(idx);
+      if (r.bloomedNow) this.celebrateBloom(idx, r.variant);
     } else if (r.status === "overwatered") {
       this.sadShake(idx);
     } else {
@@ -1505,20 +1518,22 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     node.seedSign.setVisible(inviting);
     if (!plant) {
       node.img.setVisible(false);
+      this.syncVariantFx(i, null, false);
       return;
     }
     const sp = SPECIES_BY_KEY[plant.species];
-    if (!sp) { node.img.setVisible(false); return; }
+    if (!sp) { node.img.setVisible(false); this.syncVariantFx(i, null, false); return; }
 
     const c = node.tex.getContext();
     c.clearRect(0, 0, PB_W * 2, PB_H * 2);
     c.save();
     c.scale(2, 2);
     c.translate(PB_X, PB_Y);
-    drawPlant(c, sp, { stage: plant.stage, wilted: plant.wilted, dead: plant.dead });
+    drawPlant(c, sp, { stage: plant.stage, wilted: plant.wilted, dead: plant.dead, variant: plant.variant });
     c.restore();
     node.tex.refresh();
     node.img.setVisible(true);
+    this.syncVariantFx(i, plant.variant, plant.dead);
 
     // A last-day plant trembles; anything healthier stands still. The tween
     // is tracked per plot — never discovered by walking the tween list, which
@@ -1533,6 +1548,181 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       shivering.stop();
       this.shivers.delete(i);
       node.img.setAngle(0);
+    }
+  }
+
+  // ================= living variants =================
+
+  /**
+   * Rebuild a plot's variant dressing. Cheap to call — it no-ops unless the
+   * variant actually changed, because repaintPlot runs on every state load.
+   */
+  private syncVariantFx(i: number, variant: string | null | undefined, dead: boolean) {
+    const want = dead ? null : (variant ?? null);
+    const cur = this.variantFx[i] ?? null;
+    if ((cur?.key ?? null) === want) return;
+    if (cur) {
+      cur.objs.forEach((o) => { this.tweens.killTweensOf(o); o.destroy(); });
+      this.variantFx[i] = null;
+    }
+    if (!want) return;
+    this.variantFx[i] = this.buildVariantFx(i, want);
+  }
+
+  private buildVariantFx(i: number, key: string) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    const objs: Phaser.GameObjects.GameObject[] = [];
+    const motes: Array<{ o: Phaser.GameObjects.Image; phase: number; rx: number; ry: number; cy: number; sp: number }> = [];
+    const base = YARD + p.y;
+    const plant = this.plotState(i)?.plant;
+    const form = SPECIES_BY_KEY[plant?.species ?? ""]?.form;
+    // The plant's optical centre and its reach. A pad sits almost on the
+    // water; a sunflower is three times as tall — a fixed offset would leave
+    // the dressing floating in the sky above the short ones.
+    const hPx = form ? plantHeightPx(form, plant?.stage ?? 6) : 46;
+    const cy = p.y - hPx * 0.52;
+    const reach = Math.max(26, hPx * 0.46);
+
+    /** One orbiting speck. Depth is re-evaluated every frame as it travels. */
+    const mote = (
+      tex: string, tint: number, scale: number, phase: number,
+      rx: number, ry: number, sp: number, blend?: Phaser.BlendModes
+    ) => {
+      const o = this.add.image(p.x, cy, tex).setScale(scale).setTint(tint).setDepth(base);
+      if (blend !== undefined) o.setBlendMode(blend);
+      objs.push(o);
+      motes.push({ o, phase, rx, ry, cy, sp });
+      return o;
+    };
+
+    if (key === "dewkissed") {
+      // beads that gather, swell, then let go and fall off the leaf
+      for (let k = 0; k < 3; k++) {
+        const bead = this.add.image(p.x - reach * 0.4 + k * reach * 0.4, cy - reach * 0.3 + k * reach * 0.22, "hint")
+          .setScale(0.2).setAlpha(0).setDepth(base + 0.6);
+        objs.push(bead);
+        this.tweens.chain({
+          targets: bead,
+          loop: -1,
+          tweens: [
+            { alpha: 0.95, scale: 0.34, duration: 900, delay: k * 620, ease: "Sine.easeOut" },
+            { y: "+=6", duration: 700, ease: "Sine.easeIn" },
+            { y: "+=34", alpha: 0, scale: 0.18, duration: 460, ease: "Quad.easeIn" },
+            { y: "-=40", duration: 1 },
+            { alpha: 0, duration: 700 },
+          ],
+        });
+      }
+      // a wet sheen that travels across the plant
+      const sheen = this.add.image(p.x, cy, "sunglow")
+        .setScale(reach / 130, reach / 230).setAlpha(0).setTint(0xd8f4ff)
+        .setBlendMode(Phaser.BlendModes.SCREEN).setDepth(base + 0.7);
+      objs.push(sheen);
+      this.tweens.add({
+        targets: sheen, x: { from: p.x - reach * 0.85, to: p.x + reach * 0.85 },
+        alpha: { from: 0, to: 0.5 }, duration: 1400, yoyo: true,
+        repeat: -1, repeatDelay: 1800, ease: "Sine.easeInOut",
+      });
+      mote("spark", 0xbfeaff, 0.5, 0, reach, reach * 0.38, 0.55, Phaser.BlendModes.ADD);
+      mote("spark", 0xffffff, 0.36, Math.PI, reach * 0.84, reach * 0.3, 0.55, Phaser.BlendModes.ADD);
+    }
+
+    if (key === "variegated") {
+      // light moving over a striped leaf — a band sweeping through
+      const band = this.add.image(p.x, cy, "sunglow")
+        .setScale(reach / 270, reach / 90).setAngle(-24).setAlpha(0)
+        .setTint(0xfff3c4).setBlendMode(Phaser.BlendModes.SCREEN)
+        .setDepth(base + 0.7);
+      objs.push(band);
+      this.tweens.add({
+        targets: band, x: { from: p.x - reach * 1.15, to: p.x + reach * 1.15 },
+        alpha: { from: 0, to: 0.62 }, duration: 1500,
+        yoyo: true, repeat: -1, repeatDelay: 2200, ease: "Sine.easeInOut",
+      });
+      // flecks of cream lifting off the foliage
+      for (let k = 0; k < 3; k++) {
+        const f = this.add.image(p.x - reach * 0.35 + k * reach * 0.35, cy, "petalbit")
+          .setTint(0xfff0bf).setScale(0.7).setAlpha(0).setDepth(base + 0.5);
+        objs.push(f);
+        this.tweens.add({
+          targets: f, y: "-=" + (26 + k * 5), x: (k % 2 ? "+=12" : "-=12"),
+          angle: 180, alpha: { from: 0.9, to: 0 },
+          duration: 2400, delay: k * 800, repeat: -1, ease: "Sine.easeOut",
+        });
+      }
+      mote("spark", 0xffe9a8, 0.44, 1.1, reach * 0.94, reach * 0.35, 0.4, Phaser.BlendModes.ADD);
+    }
+
+    if (key === "moonlit") {
+      // a halo that breathes behind the plant
+      const halo = this.add.image(p.x, cy, "moonglow")
+        .setScale(reach / 58).setAlpha(0.5).setTint(0xcdd6ff)
+        .setBlendMode(Phaser.BlendModes.SCREEN).setDepth(base - 0.8);
+      objs.push(halo);
+      this.tweens.add({
+        targets: halo, scale: (reach / 58) * 1.3, alpha: 0.78,
+        duration: 2600, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
+      });
+      // a cool rim light on the plant itself
+      const rim = this.add.image(p.x - 9, cy, "sunglow")
+        .setScale(reach / 140, reach / 84).setAlpha(0.28).setTint(0xaebdff)
+        .setBlendMode(Phaser.BlendModes.SCREEN).setDepth(base + 0.6);
+      objs.push(rim);
+      this.tweens.add({
+        targets: rim, alpha: 0.5, duration: 2100, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
+      });
+      for (let k = 0; k < 4; k++) {
+        mote("spark", 0xdfe6ff, 0.42 + (k % 2) * 0.12,
+          (k / 4) * Math.PI * 2, reach * 1.05, reach * 0.4, 0.42, Phaser.BlendModes.ADD);
+      }
+    }
+
+    if (key === "golden") {
+      const rays = this.add.image(p.x, cy, "ray")
+        .setScale(reach / 140).setAlpha(0.34).setTint(0xffd979)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(base - 0.8);
+      objs.push(rays);
+      this.tweens.add({ targets: rays, angle: 360, duration: 14000, repeat: -1 });
+      this.tweens.add({
+        targets: rays, alpha: 0.55, scale: (reach / 140) * 1.2,
+        duration: 2200, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
+      });
+      // the gilt catches the light every few seconds
+      const glint = this.add.image(p.x + 6, cy - 6, "spark")
+        .setScale(0).setTint(0xfff6d0).setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(base + 0.8);
+      objs.push(glint);
+      this.tweens.add({
+        targets: glint, scale: { from: 0, to: 1.5 }, alpha: { from: 1, to: 0 },
+        duration: 620, repeat: -1, repeatDelay: 2600, ease: "Quad.easeOut",
+      });
+      for (let k = 0; k < 5; k++) {
+        mote("spark", k % 2 ? 0xffe9a8 : 0xfff3cf, 0.4 + (k % 3) * 0.1,
+          (k / 5) * Math.PI * 2, reach * 1.15, reach * 0.45, 0.5, Phaser.BlendModes.ADD);
+      }
+    }
+
+    return { key, objs, motes, plot: i };
+  }
+
+  /**
+   * Drive the orbits. Depth flips as a mote crosses behind the plant, and it
+   * dims as it goes — occlusion plus aerial perspective is what reads as 3D
+   * on a flat canvas.
+   */
+  private stepVariantFx(now: number) {
+    for (const fx of this.variantFx) {
+      if (!fx) continue;
+      const p = PLOTS[fx.plot] ?? PLOTS[0];
+      const base = YARD + p.y;
+      for (const m of fx.motes) {
+        const a = m.phase + (now / 1000) * m.sp * Math.PI * 2;
+        const sin = Math.sin(a);
+        m.o.setPosition(p.x + Math.cos(a) * m.rx, m.cy + sin * m.ry * 0.5);
+        const near = (sin + 1) / 2;
+        m.o.setDepth(base + (sin > 0 ? 0.9 : -0.9));
+        m.o.setAlpha(0.3 + near * 0.65);
+      }
     }
   }
 
@@ -2210,14 +2400,23 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       .setAlpha(0);
     const drop = this.add.image(p.x + 26, p.y - 66, "hint")
       .setDepth(965).setScale(0.28).setAlpha(0);
+    // where the wallet counter sits on screen, in world terms
+    const bank = this.cameras.main.getWorldPoint(64, 26);
     this.tweens.add({
       targets: [label, drop], alpha: 1, scale: { from: 0.2, to: 1 },
       duration: 260, ease: "Back.easeOut",
       onComplete: () => {
+        // it does not just fade — it flies to the purse and pulses the count,
+        // so earning and balance are visibly the same thing
         this.tweens.add({
           targets: [label, drop],
-          y: "-=46", alpha: 0, duration: 950, delay: 320, ease: "Sine.easeIn",
-          onComplete: () => { label.destroy(); drop.destroy(); },
+          x: bank.x, y: bank.y, scale: 0.35, alpha: 0.15,
+          duration: 620, delay: 260, ease: "Cubic.easeIn",
+          onComplete: () => {
+            label.destroy(); drop.destroy();
+            this.sparkles.explode(6, bank.x, bank.y);
+            this.bridge.onDewBanked?.(dew);
+          },
         });
       },
     });
@@ -2255,12 +2454,128 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.sparkles.explode(8, x0, PLOTS[i].y - 30);
   }
 
+  /**
+   * A new stage is a week of somebody's life, so it gets a real beat: soil
+   * lifts, the plant springs taller than it will settle, a green ring opens
+   * from the base and a ribbon names the stage that was just reached.
+   */
   private stagePop(i: number) {
-    const img = this.plotNodes[i]?.img;
+    const node = this.plotNodes[i];
+    const img = node?.img;
     if (!img) return;
-    img.setScale(0.28);
-    this.tweens.add({ targets: img, scale: 0.5, duration: 520, ease: "Back.easeOut" });
-    this.sparkles.explode(26, PLOTS[i].x, PLOTS[i].y - 44);
+    const p = PLOTS[i] ?? PLOTS[0];
+
+    // soil kicked up at the base
+    const puff = this.add.graphics().setDepth(YARD + p.y - 0.6);
+    puff.fillStyle(0x6b4a30, 0.5);
+    puff.fillEllipse(p.x, p.y + 3, 54, 16);
+    this.tweens.add({
+      targets: puff, scaleX: 1.9, scaleY: 0.5, alpha: 0,
+      duration: 620, ease: "Cubic.easeOut", onComplete: () => puff.destroy(),
+    });
+
+    // the growth spring — overshoot well past the resting size, then settle
+    this.tweens.killTweensOf(img);
+    img.setScale(0.3, 0.24);
+    this.tweens.chain({
+      targets: img,
+      tweens: [
+        { scaleX: 0.44, scaleY: 0.60, duration: 300, ease: "Back.easeOut" },
+        { scaleX: 0.55, scaleY: 0.46, duration: 130, ease: "Sine.easeInOut" },
+        { scaleX: 0.5, scaleY: 0.5, duration: 260, ease: "Elastic.easeOut" },
+      ],
+    });
+
+    this.burstRing(p.x, p.y - 2, 0x8fe08a);
+    this.sparkles.explode(34, p.x, p.y - 44);
+    this.time.delayedCall(220, () => this.sparkles.explode(18, p.x, p.y - 74));
+    this.cameraPunch(0.016);
+
+    const stage = this.plotState(i)?.plant?.stage;
+    if (stage) this.stageRibbon(p.x, p.y - 104, stage);
+  }
+
+  /** "Stage 4 of 7" — the growth you cannot see on the plant itself. */
+  private stageRibbon(x: number, y: number, stage: number) {
+    const label = this.add
+      .text(x, y, `Stage ${stage} of 7`, {
+        fontFamily: "Trebuchet MS, sans-serif",
+        fontSize: "21px",
+        fontStyle: "bold",
+        color: "#f2fff0",
+        stroke: "#3e8e52",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5).setDepth(966).setScale(0.4).setAlpha(0);
+    const pips = this.add.graphics().setDepth(966).setAlpha(0);
+    for (let k = 0; k < 7; k++) {
+      pips.fillStyle(k < stage ? 0x8fe08a : 0xdfe9dd, 1);
+      pips.fillCircle(x - 39 + k * 13, y + 20, k < stage ? 4.4 : 3);
+    }
+    this.tweens.chain({
+      targets: [label, pips],
+      tweens: [
+        { alpha: 1, scale: 1, duration: 300, ease: "Back.easeOut" },
+        { y: "-=26", alpha: 0, duration: 720, delay: 1000, ease: "Sine.easeIn" },
+      ],
+      onComplete: () => { label.destroy(); pips.destroy(); },
+    });
+  }
+
+  /**
+   * Crossing a gardener level used to happen in total silence — the number in
+   * the Hall of Fame simply differed next time you looked. Now it lands.
+   */
+  celebrateLevel(level: number) {
+    const CX = W / 2;
+    const CY = 300;
+    const rays = this.add.image(CX, CY, "ray")
+      .setDepth(1198).setAlpha(0).setScale(1.4)
+      .setTint(0xffe9a8).setBlendMode(Phaser.BlendModes.ADD);
+    const spin = this.tweens.add({ targets: rays, angle: 360, duration: 7000, repeat: -1 });
+    this.tweens.add({ targets: rays, alpha: { from: 0, to: 0.7 }, duration: 420 });
+
+    const badge = this.add.graphics().setDepth(1199);
+    badge.fillStyle(0xc9a227, 1); badge.fillCircle(CX, CY, 54);
+    badge.fillStyle(0xffe9a8, 1); badge.fillCircle(CX, CY - 4, 46);
+    badge.setScale(0.2).setAlpha(0);
+    const num = this.add
+      .text(CX, CY - 4, `${level}`, {
+        fontFamily: "Trebuchet MS, sans-serif", fontSize: "52px",
+        fontStyle: "bold", color: "#7a5a06",
+      })
+      .setOrigin(0.5).setDepth(1200).setScale(0.2).setAlpha(0);
+    const cap = this.add
+      .text(CX, CY + 84, `Level ${level} gardener`, {
+        fontFamily: "Trebuchet MS, sans-serif", fontSize: "30px",
+        fontStyle: "bold", color: "#fff8e6",
+        stroke: "#a8791f", strokeThickness: 7,
+      })
+      .setOrigin(0.5).setDepth(1200).setAlpha(0);
+
+    this.tweens.chain({
+      targets: [badge, num],
+      tweens: [
+        { alpha: 1, scale: 1.14, duration: 420, ease: "Back.easeOut" },
+        { scale: 1, duration: 200, ease: "Sine.easeOut" },
+      ],
+    });
+    this.tweens.add({ targets: cap, alpha: 1, duration: 360, delay: 300 });
+    this.confetti.explode(60, CX, CY);
+    this.time.delayedCall(260, () => this.sparkles.explode(40, CX, CY));
+    this.time.delayedCall(520, () => this.confetti.explode(40, CX - 150, CY + 30));
+    this.time.delayedCall(660, () => this.confetti.explode(40, CX + 150, CY + 30));
+    this.cameraPunch(0.03);
+
+    this.time.delayedCall(2400, () => {
+      this.tweens.add({
+        targets: [badge, num, cap, rays], alpha: 0, duration: 520,
+        onComplete: () => {
+          spin.remove();
+          [badge, num, cap, rays].forEach((o) => o.destroy());
+        },
+      });
+    });
   }
 
   /**
@@ -2268,7 +2583,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
    * its plot, fills the screen at full size while the garden dims behind it,
    * then settles back down and play resumes.
    */
-  private celebrateBloom(i: number) {
+  private celebrateBloom(i: number, variant?: string | null) {
     const plot = PLOTS[i] ?? PLOTS[0];
     const node = this.plotNodes[i];
     if (!node || this.celebrating) return;
@@ -2304,21 +2619,24 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     node.img.setVisible(false);
 
     const font = '"Trebuchet MS", Verdana, system-ui, sans-serif';
+    const vdef = variant ? VARIANT_BY_KEY[variant] : undefined;
     const title = this.add
-      .text(CX, 108, "Full Bloom!", {
+      .text(CX, 108, vdef ? `${vdef.name}!` : "Full Bloom!", {
         fontFamily: font, fontSize: "58px", color: "#fff8fb",
-        stroke: "#c9527a", strokeThickness: 9,
+        stroke: vdef ? "#a8791f" : "#c9527a", strokeThickness: 9,
       })
       .setOrigin(0.5).setDepth(1203).setAlpha(0).setScale(0.6);
     const sub = this.add
-      .text(CX, 164, sp?.name ?? "", {
+      .text(CX, 164, vdef ? `A ${vdef.rarity.toLowerCase()} ${sp?.name ?? ""}` : (sp?.name ?? ""), {
         fontFamily: font, fontSize: "27px", color: "#ffffff",
         stroke: "#3e8e52", strokeThickness: 6,
       })
       .setOrigin(0.5).setDepth(1203).setAlpha(0);
     const foot = this.add
       .text(CX, H - 46,
-        plant ? `${plant.dayNumber} days of care · +${sp?.points ?? 0} points` : "",
+        vdef
+          ? vdef.blurb
+          : plant ? `${plant.dayNumber} days of care · +${sp?.points ?? 0} points` : "",
         { fontFamily: font, fontSize: "21px", color: "#fdf6e3" })
       .setOrigin(0.5).setDepth(1203).setAlpha(0);
 
@@ -2342,7 +2660,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
     // 2. the fanfare
     this.confetti.explode(70, CX, CY - 40);
-    this.time.delayedCall(260, () => this.sparkles.explode(34, CX, CY + 40));
+    this.time.delayedCall(260, () => this.sparkles.explode(vdef ? 60 : 34, CX, CY + 40));
+    if (vdef) {
+      this.time.delayedCall(520, () => this.confetti.explode(40, CX, CY));
+      this.time.delayedCall(820, () => this.sparkles.explode(40, CX, CY - 30));
+    }
     this.time.delayedCall(620, () => this.confetti.explode(60, CX - 180, CY - 20));
     this.time.delayedCall(760, () => this.confetti.explode(60, CX + 180, CY - 20));
     this.time.delayedCall(1150, () => this.sparkles.explode(26, CX, CY + 90));

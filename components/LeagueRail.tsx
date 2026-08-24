@@ -1,6 +1,7 @@
 "use client";
 
 import { Trophy } from "lucide-react";
+import CareWeek from "./CareWeek";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import type { LeagueState } from "@/lib/types";
@@ -61,6 +62,8 @@ export default function LeagueRail({
               of {league.size} · {league.myScore} pts
             </span>
           </div>
+
+          <CareWeek refreshKey={refreshKey} />
 
           <ol className="board-list rail-list">
             {league.members.slice(0, 10).map((m) => {
