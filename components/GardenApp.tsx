@@ -110,6 +110,29 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     });
   }, [supabase, bridge, applyState, showToast]);
 
+  // Tell the scene how much of the screen the pull-up sheet covers, so the
+  // plots never sit underneath it.
+  useEffect(() => {
+    const measure = () => {
+      const el = document.querySelector(".panel-wrap") as HTMLElement | null;
+      if (!el) return bridge.setBottomInset(0);
+      const style = getComputedStyle(el);
+      // only the fixed sheet overlaps the stage; the desktop panel does not
+      if (style.position !== "fixed") return bridge.setBottomInset(0);
+      const covered = window.innerHeight - el.getBoundingClientRect().top;
+      bridge.setBottomInset(Math.max(0, Math.min(covered, window.innerHeight * 0.55)));
+    };
+    measure();
+    const t = setTimeout(measure, 350); // after the sheet transition
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+    };
+  }, [bridge, sheetOpen, state]);
+
   // The gardener should not wander behind an open modal.
   useEffect(() => {
     bridge.setFrozen(tutorial || seedFor !== null || journalOpen);

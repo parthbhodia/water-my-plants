@@ -97,6 +97,12 @@ adaptation, and hold to these rules:
 - **Landscape is the recommended orientation** and the installed PWA locks
   to it; in the browser, portrait still works and only *invites* rotation.
   Never block play on orientation.
+- **`touch-action: none` on the game canvas.** Without it Safari claims the
+  gesture as scroll/zoom and Phaser never sees the tap — the canvas looks
+  alive but nothing responds.
+- **The scene must not draw under React chrome.** `bridge.setBottomInset(px)`
+  reports how much of the screen the pull-up sheet covers; the camera
+  viewport shrinks to match, so plots can never hide beneath it.
 - **Touch devices never see keyboard copy** — no W A S D, no "press E".
   Gate on `matchMedia("(pointer: coarse)")`.
 
@@ -105,7 +111,9 @@ adaptation, and hold to these rules:
 `node scripts/mobile-audit.mjs` walks the landing page and every garden
 panel across three phone viewports and reports horizontal overflow,
 sub-44px tap targets, controls pushed off-screen, and page errors.
-**It must print `0 findings` before shipping UI work.** It needs
+**It must print `0 findings` before shipping UI work.** It also taps a
+plant through the real canvas and asserts the scene registered the hit,
+which is the check that catches gesture regressions. It needs
 `npm run start` on :3000 and the `app/dev-mobile` fixture, which mounts
 every panel with mock state so no login is required. Screenshots land in
 `/tmp/mobile-audit`.

@@ -300,7 +300,16 @@ button { font-family: var(--font); cursor: pointer; }
     0 12px 24px -10px rgba(23, 52, 40, 0.35);
 }
 .game-host { width: 100%; aspect-ratio: 960 / 600; }
-.game-host canvas { display: block; width: 100% !important; height: 100% !important; }
+.game-host canvas {
+  display: block; width: 100% !important; height: 100% !important;
+  /* Safari treats an untagged canvas as scrollable/zoomable and swallows
+     taps before Phaser sees them. The scene owns every gesture here. */
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.game-host { touch-action: none; }
 
 .game-loading {
   position: absolute; inset: 0;
@@ -2006,3 +2015,9 @@ button { font-family: var(--font); cursor: pointer; }
 .rotate-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 92vw; line-height: 1.3; }
 .hero-note { margin: 6px 0 0; font-size: .82rem; color: var(--ink-soft); font-weight: 600; }
 @media (pointer: fine) { .hero-note { display: none; } }
+
+/* On phones the stage keeps only the controls it needs; the almanac,
+   gardener studio, league and sign-out all live in the tabs below. */
+@media (max-width: 920px) {
+  .hud-icon-btn.hud-desk { display: none; }
+}

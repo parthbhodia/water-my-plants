@@ -48,11 +48,24 @@ export default function DevMobile() {
   useEffect(() => {
     bridge.setAvatar(DEFAULT_AVATAR);
     bridge.setGarden(STATE);
+    const measure = () => {
+      const el = document.querySelector(".panel-wrap") as HTMLElement | null;
+      if (!el || getComputedStyle(el).position !== "fixed") return bridge.setBottomInset(0);
+      bridge.setBottomInset(Math.max(0, window.innerHeight - el.getBoundingClientRect().top));
+    };
+    measure();
+    const t = setTimeout(measure, 350);
+    window.addEventListener("resize", measure);
+
     const w = window as unknown as Record<string, unknown>;
-    w.__tab = (t: PanelTab) => setTab(t);
+    w.__tab = (x: PanelTab) => setTab(x);
     w.__modal = (m: string | null) => setModal(m as never);
     w.__sheet = (o: boolean) => setSheetOpen(o);
-  }, [bridge]);
+    w.__tapped = null;
+    bridge.onPlotTapped = (i) => { w.__tapped = i; };
+
+    return () => { clearTimeout(t); window.removeEventListener("resize", measure); };
+  }, [bridge, sheetOpen]);
   return (
     <main className="garden-wrap">
       <div className="garden-shell"><div className="garden-main">

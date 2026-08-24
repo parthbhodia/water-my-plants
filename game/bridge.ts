@@ -10,6 +10,7 @@ export interface SceneApi {
   applyOutcome(r: TendResult): void;
   setFrozen(v: boolean): void;
   focusPlot(i: number, zoomMul?: number): void;
+  setBottomInset(px: number): void;
   releaseFocus(): void;
 }
 
@@ -18,6 +19,7 @@ export class GameBridge {
   private pendingState: GardenState | null = null;
   private pendingAvatar: Avatar | null = null;
   private frozen = false;
+  private inset = 0;
 
   /** React sets these */
   onPourStart: ((plotIdx: number, action: TendAction) => void) | null = null;
@@ -30,6 +32,7 @@ export class GameBridge {
     if (this.pendingAvatar) api.setAvatar(this.pendingAvatar);
     if (this.pendingState) api.setGarden(this.pendingState);
     if (this.frozen) api.setFrozen(true);
+    if (this.inset) api.setBottomInset(this.inset);
   }
 
   detach() {
@@ -56,6 +59,12 @@ export class GameBridge {
 
   applyOutcome(r: TendResult) {
     this.sceneApi?.applyOutcome(r);
+  }
+
+  /** Screen pixels of React chrome at the bottom; the camera avoids them. */
+  setBottomInset(px: number) {
+    this.inset = px;
+    this.sceneApi?.setBottomInset(px);
   }
 
   /** Camera dive into one plot (guided planting) and back out. */

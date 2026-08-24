@@ -153,6 +153,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private pendingPour = false;
   private lastStepMs = 0;
   private userZoom = 1;
+  private bottomInset = 0;
   private panActive = false;
   private pinchDist = 0;
   private downAt = { x: 0, y: 0 };
@@ -192,6 +193,16 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     if (typeof window !== "undefined" && window.location.hostname === "localhost") {
       (window as unknown as Record<string, unknown>).__lilyProbe = () =>
         ({ x: this.player?.x, y: this.player?.y, pouring: this.pouring, target: this.autoTarget });
+      // where a plot sits on the physical screen — lets tests tap it
+      (window as unknown as Record<string, unknown>).__plotScreenPos = (i: number) => {
+        const pl = PLOTS[i];
+        if (!pl) return null;
+        const cam = this.cameras.main;
+        const canvas = this.game.canvas.getBoundingClientRect();
+        const sx = (pl.x - cam.worldView.x) * cam.zoom * (canvas.width / this.scale.width);
+        const sy = (pl.y - 20 - cam.worldView.y) * cam.zoom * (canvas.height / this.scale.height);
+        return { x: canvas.left + sx, y: canvas.top + sy };
+      };
     }
     const kb = this.input.keyboard;
     if (kb) {
@@ -359,14 +370,27 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.glideCamera(W / 2, 480, 1, 850);
   }
 
-  /** Cover-fit the world, then multiply in the player's own zoom. */
+  /**
+   * How many screen pixels at the bottom are covered by React chrome (the
+   * mobile pull-up sheet). The camera renders above it, so the plots can
+   * never hide underneath.
+   */
+  setBottomInset(px: number) {
+    this.bottomInset = Math.max(0, px);
+    this.applyCamera(true);
+  }
+
+  /** Cover-fit the world into the visible strip, then apply the user zoom. */
   private applyCamera(recenter = false) {
     const cam = this.cameras.main;
-    const cover = Math.max(this.scale.width / W, this.scale.height / H);
+    const vw = this.scale.width;
+    const vh = Math.max(120, this.scale.height - this.bottomInset);
+    cam.setViewport(0, 0, vw, vh);
+    // fit the world's WIDTH and show as much height as the strip allows —
+    // on a wide, short phone screen this keeps the whole yard in frame
+    const cover = Math.max(vw / W, Math.min(vh / H, (vw / W) * 1.35));
     cam.setZoom(cover * this.userZoom);
-    // When cropping (cover > fit) the default view is the top of the sky;
-    // aim at the yard instead. Bounds clamp whatever we ask for.
-    if (recenter) cam.centerOn(W / 2, 480);
+    if (recenter) cam.centerOn(W / 2, 470);
   }
 
   /** Freezes walking and taps while React shows a full-screen panel. */
@@ -1324,14 +1348,21 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       const marker = this.add.graphics().setDepth(YARD + pl.y - 0.5);
 
       // padlock for plots that are not unlocked yet
-      const lock = this.add.container(pl.x, pl.y - 6).setDepth(YARD + pl.y + 0.2);
+      // a pond plot's padlock floats above the water, not in it
+      const lockY = pl.kind === "water" ? POND_Y - POND_RY - 26 : pl.y - 6;
+      const lock = this.add.container(pl.x, lockY).setDepth(YARD + pl.y + 0.2);
       const lg2 = this.add.graphics();
-      lg2.fillStyle(0x1f3d2d, 0.22);
-      lg2.fillRoundedRect(-15, -12, 30, 24, 6);
-      lg2.lineStyle(2.4, 0xffffff, 0.5);
-      lg2.strokeRoundedRect(-15, -12, 30, 24, 6);
-      lg2.lineStyle(3, 0xffffff, 0.5);
-      lg2.beginPath(); lg2.arc(0, -12, 7, Math.PI, 0); lg2.strokePath();
+      // shackle first, well above the body, so it reads as a padlock
+      lg2.lineStyle(3.4, 0xffffff, 0.55);
+      lg2.beginPath(); lg2.arc(0, -11, 6.5, Math.PI, 0); lg2.strokePath();
+      lg2.fillStyle(0x1f3d2d, 0.28);
+      lg2.fillRoundedRect(-11, -11, 22, 21, 5);
+      lg2.lineStyle(2.4, 0xffffff, 0.6);
+      lg2.strokeRoundedRect(-11, -11, 22, 21, 5);
+      // keyhole
+      lg2.fillStyle(0xffffff, 0.6);
+      lg2.fillCircle(0, -3, 2.6);
+      lg2.fillRoundedRect(-1.2, -3, 2.4, 7, 1.2);
       lock.add(lg2);
 
       const zone = this.add.zone(pl.x, pl.y - 20, 76, 86).setDepth(30);

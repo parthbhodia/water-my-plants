@@ -51,9 +51,9 @@ export default function Hud({
         </div>
       </div>
       <div className="hud-buttons">
-        <button className="hud-icon-btn" onClick={onLeague} title="League"><Trophy size={19} strokeWidth={2.2} aria-hidden /></button>
-        <button className="hud-icon-btn" onClick={onJournal} title="Almanac"><BookOpen size={19} strokeWidth={2.2} aria-hidden /></button>
-        <button className="hud-icon-btn" onClick={onStudio} title="Profile & gardener"><Palette size={19} strokeWidth={2.2} aria-hidden /></button>
+        <button className="hud-icon-btn hud-desk" onClick={onLeague} title="League"><Trophy size={19} strokeWidth={2.2} aria-hidden /></button>
+        <button className="hud-icon-btn hud-desk" onClick={onJournal} title="Almanac"><BookOpen size={19} strokeWidth={2.2} aria-hidden /></button>
+        <button className="hud-icon-btn hud-desk" onClick={onStudio} title="Profile & gardener"><Palette size={19} strokeWidth={2.2} aria-hidden /></button>
         <button className="hud-icon-btn" onClick={onHelp} title="How to play"><CircleHelp size={19} strokeWidth={2.2} aria-hidden /></button>
         <button
           className="hud-icon-btn"
@@ -66,7 +66,7 @@ export default function Hud({
         <button className="hud-icon-btn" onClick={onToggleMute} title={muted ? "Unmute" : "Mute"}>
           {muted ? <VolumeX size={19} strokeWidth={2.2} aria-hidden /> : <Volume2 size={19} strokeWidth={2.2} aria-hidden />}
         </button>
-        <button className="hud-icon-btn" onClick={onSignOut} title="Sign out"><LogOut size={19} strokeWidth={2.2} aria-hidden /></button>
+        <button className="hud-icon-btn hud-desk" onClick={onSignOut} title="Sign out"><LogOut size={19} strokeWidth={2.2} aria-hidden /></button>
       </div>
     </div>
   );

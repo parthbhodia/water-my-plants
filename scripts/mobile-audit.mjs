@@ -106,6 +106,30 @@ for (const d of DEVICES) {
     await audit(page, `${d.name}--modal-${m}`, findings);
     await page.evaluate(() => window.__modal(null));
   }
+  // ---- can a thumb actually tap a plant? ----
+  await page.goto(`${BASE}/dev-mobile`, { waitUntil: "networkidle" });
+  await page.waitForSelector("canvas");
+  await page.waitForTimeout(2200);
+  const probe = await page.evaluate(() => window.__lilyProbe?.());
+  const canvasBox = await page.locator(".game-host canvas").boundingBox();
+  // tap where the scene says a plant is: convert world -> screen via the probe
+  const hit = await page.evaluate(() => {
+    // ask the scene for a plot's screen position
+    const g = window.__plotScreenPos?.(0);
+    return g ?? null;
+  });
+  if (hit && canvasBox) {
+    await page.touchscreen.tap(hit.x, hit.y);
+    await page.waitForTimeout(500);
+    const tapped = await page.evaluate(() => window.__tapped);
+    if (tapped === null || tapped === undefined) {
+      findings.push(`${d.name}--tap: TAP ON PLANT DID NOT REGISTER at (${Math.round(hit.x)}, ${Math.round(hit.y)})`);
+      await page.screenshot({ path: `${OUT}/${d.name}--tap-fail.png` });
+    }
+  } else {
+    findings.push(`${d.name}--tap: could not locate a plant on screen (probe=${JSON.stringify(probe)})`);
+  }
+
   await ctx.close();
 }
 
