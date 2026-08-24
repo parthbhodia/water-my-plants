@@ -490,7 +490,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
 
         {state && rotateHint && (
           <button className="rotate-chip" onClick={() => setRotateHint(false)}>
-            <RotateCw size={13} strokeWidth={2.6} aria-hidden /> Turn your phone sideways — the garden plays best in landscape
+            <RotateCw size={14} strokeWidth={2.6} aria-hidden /> Turn sideways for the full garden
           </button>
         )}
 
