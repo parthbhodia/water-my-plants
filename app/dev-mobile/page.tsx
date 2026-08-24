@@ -6,11 +6,13 @@ import dynamic from "next/dynamic";
 import { GameBridge } from "@/game/bridge";
 import { DEFAULT_AVATAR } from "@/game/avatar";
 import type { GardenState, PlantState, PlotState } from "@/lib/types";
+import { canWaterNow } from "@/lib/species";
 import Hud from "@/components/Hud";
 import TabBar, { type PanelTab } from "@/components/TabBar";
 import PlotBar from "@/components/PlotBar";
 import RestorePanel from "@/components/RestorePanel";
 import NextStep from "@/components/NextStep";
+import WaterFab from "@/components/WaterFab";
 import ProfilePanel from "@/components/ProfilePanel";
 import SeedPicker from "@/components/SeedPicker";
 import Journal from "@/components/Journal";
@@ -37,7 +39,8 @@ const STATE = {
   ],
   unlockedSpecies:["lily","sunflower","fern","cactus"], gardenScore:68, completedCount:2,
   plots: KINDS.map((kind, idx) => ({ idx, kind, unlocked: idx<6,
-    plant: idx===0 ? mk("lily",0,4) : idx===1 ? mk("sunflower",1,5) : null })),
+    plant: idx===0 ? mk("lily",0,4) : idx===1 ? mk("sunflower",1,5)
+         : idx===2 ? mk("fern",2,3) : idx===3 ? mk("cactus",3,2) : null })),
 } as GardenState;
 
 export default function DevMobile() {
@@ -65,7 +68,13 @@ export default function DevMobile() {
     w.__sheet = (o: boolean) => setSheetOpen(o);
     w.__tapped = null;
     w.__poured = null;
-    bridge.onPlotTapped = (i) => { w.__tapped = i; };
+    // mirrors GardenApp: a tap on a plant that can drink waters it
+    bridge.onPlotTapped = (i) => {
+      w.__tapped = i;
+      setSel(i);
+      const pl = STATE.plots[i]?.plant;
+      if (canWaterNow(pl, STATE.hour)) bridge.tend(i, "water");
+    };
     bridge.onPourStart = (plotIdx, action) => {
       w.__poured = { plotIdx, action };
       setTimeout(() => {
@@ -83,6 +92,10 @@ export default function DevMobile() {
       <div className="garden-shell"><div className="garden-main">
         <div className="game-frame">
           <GameCanvas bridge={bridge} />
+          <WaterFab state={STATE} selected={sel} busy={false} roundLeft={0}
+            onWater={(i)=>{ setSel(i); bridge.select(i); bridge.tend(i,"water"); }}
+            onWaterAll={()=>{ const due = STATE.plots.filter(p=>p.unlocked && p.plant && p.plant.thirsty).map(p=>p.idx);
+              (window as unknown as Record<string, unknown>).__round = due; bridge.setCombo(1); bridge.tend(due[0],"water"); }} />
           <Hud state={STATE} muted={false} musicOn musicName="Sunny Meadow"
             onJournal={()=>setModal("journal")} onStudio={()=>setTab("profile")} onLeague={()=>setTab("league")}
             onHelp={()=>setModal("tutorial")} onToggleMute={()=>{}} onToggleMusic={()=>{}} onSignOut={()=>{}} />

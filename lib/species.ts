@@ -121,3 +121,13 @@ export function windowOpen(s: SpeciesDef, hour: number): boolean {
     ? hour >= s.windowStart && hour < s.windowEnd
     : hour >= s.windowStart || hour < s.windowEnd;
 }
+
+/** Can this plant take a drink right now? The one source of truth. */
+export function canWaterNow(
+  plant: { thirsty: boolean; isBloomed: boolean; dead: boolean; species: string } | null | undefined,
+  hour: number
+): boolean {
+  if (!plant || plant.isBloomed || plant.dead || !plant.thirsty) return false;
+  const sp = SPECIES_BY_KEY[plant.species];
+  return !!sp && windowOpen(sp, hour);
+}

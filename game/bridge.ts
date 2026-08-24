@@ -11,6 +11,8 @@ export interface SceneApi {
   setFrozen(v: boolean): void;
   focusPlot(i: number, zoomMul?: number): void;
   setBottomInset(px: number): void;
+  celebrateRound(count: number): void;
+  setCombo(n: number): void;
   releaseFocus(): void;
 }
 
@@ -59,6 +61,16 @@ export class GameBridge {
 
   applyOutcome(r: TendResult) {
     this.sceneApi?.applyOutcome(r);
+  }
+
+  /** How many waterings deep the current round is (drives the flourish). */
+  setCombo(n: number) {
+    this.sceneApi?.setCombo(n);
+  }
+
+  /** The whole round finished — confetti over the garden. */
+  celebrateRound(count: number) {
+    this.sceneApi?.celebrateRound(count);
   }
 
   /** Screen pixels of React chrome at the bottom; the camera avoids them. */

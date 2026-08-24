@@ -152,6 +152,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private autoTarget: { x: number; y: number } | null = null;
   private pendingPour = false;
   private lastStepMs = 0;
+  /** how many waterings deep the current round is */
+  comboCount = 0;
+  private shivers = new Map<number, Phaser.Tweens.Tween>();
   private userZoom = 1;
   private bottomInset = 0;
   private panActive = false;
@@ -433,6 +436,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       this.splashAt(idx);
       this.drinkGulp(idx);
       this.wetSoil(idx);
+      this.celebrateWater(idx, this.comboCount);
       if (r.dewEarned) this.rewardFloat(idx, r.dewEarned);
       if (r.grew) this.stagePop(idx);
       if (r.bloomedNow) this.celebrateBloom(idx);
@@ -1516,17 +1520,18 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     node.tex.refresh();
     node.img.setVisible(true);
 
-    // a last-day plant trembles; anything healthier stands still
-    const shiverKey = "shiver" + i;
-    const existing = this.tweens.getTweensOf(node.img).find((t) => t.data && (t as unknown as { shiverKey?: string }).shiverKey === shiverKey);
-    if (lastDay && !existing) {
-      const tw = this.tweens.add({
+    // A last-day plant trembles; anything healthier stands still. The tween
+    // is tracked per plot — never discovered by walking the tween list, which
+    // used to tear down the chained drink animation mid-flight.
+    const shivering = this.shivers.get(i);
+    if (lastDay && !shivering) {
+      this.shivers.set(i, this.tweens.add({
         targets: node.img, angle: { from: -1.6, to: 1.6 },
         duration: 260, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
-      });
-      (tw as unknown as { shiverKey?: string }).shiverKey = shiverKey;
-    } else if (!lastDay) {
-      this.tweens.getTweensOf(node.img).forEach((t) => t.remove());
+      }));
+    } else if (!lastDay && shivering) {
+      shivering.stop();
+      this.shivers.delete(i);
       node.img.setAngle(0);
     }
   }
@@ -2051,10 +2056,110 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.time.delayedCall(180, () => this.sparkles.explode(8, p.x, p.y - 48));
   }
 
+  /** A soft punch of the camera — felt more than seen. */
+  private cameraPunch(strength = 0.02) {
+    const cam = this.cameras.main;
+    const z = cam.zoom;
+    const proxy = { t: 0 };
+    this.tweens.add({
+      targets: proxy, t: 1, duration: 320, ease: "Sine.easeOut",
+      onUpdate: () => cam.setZoom(z * (1 + Math.sin(proxy.t * Math.PI) * strength)),
+      onComplete: () => cam.setZoom(z),
+    });
+  }
+
+  /** An expanding ring of light where the water landed. */
+  private burstRing(x: number, y: number, tint = 0x9fe4ff) {
+    const g = this.add.graphics().setDepth(958);
+    g.lineStyle(5, tint, 0.9);
+    g.strokeCircle(0, 0, 18);
+    g.setPosition(x, y);
+    this.tweens.add({
+      targets: g, scaleX: 3.4, scaleY: 1.5, alpha: 0,
+      duration: 620, ease: "Cubic.easeOut",
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  /** Escalating "n in a row" flourish while a watering round runs. */
+  private comboFlash(n: number, x: number, y: number) {
+    if (n < 2) return;
+    const label = this.add
+      .text(x, y - 96, `${n} in a row!`, {
+        fontFamily: "Trebuchet MS, sans-serif",
+        fontSize: `${20 + Math.min(n, 6) * 2}px`,
+        fontStyle: "bold",
+        color: "#fff6d8",
+        stroke: "#c98d1c",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(968)
+      .setScale(0.3)
+      .setAngle(-6);
+    this.tweens.chain({
+      targets: label,
+      tweens: [
+        { scale: 1.15, angle: 3, duration: 240, ease: "Back.easeOut" },
+        { scale: 1, angle: 0, duration: 140 },
+        { y: label.y - 34, alpha: 0, duration: 700, delay: 340, ease: "Sine.easeIn" },
+      ],
+      onComplete: () => label.destroy(),
+    });
+  }
+
+  /** The full watering payoff, louder the deeper into a round you are. */
+  celebrateWater(i: number, combo = 0) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    this.burstRing(p.x, p.y - 6);
+    this.time.delayedCall(140, () => this.burstRing(p.x, p.y - 30, 0xffe9a8));
+    this.cameraPunch(0.018 + Math.min(combo, 5) * 0.004);
+    this.sparkles.explode(18 + Math.min(combo, 6) * 4, p.x, p.y - 40);
+    this.comboFlash(combo, p.x, p.y);
+  }
+
+  setCombo(n: number) {
+    this.comboCount = n;
+  }
+
+  /** The whole round is done — the garden says thank you. */
+  celebrateRound(count: number) {
+    const CX = W / 2;
+    const CY = 300;
+    this.confetti.explode(60, CX, CY);
+    this.time.delayedCall(240, () => this.confetti.explode(40, CX - 160, CY + 40));
+    this.time.delayedCall(420, () => this.confetti.explode(40, CX + 160, CY + 40));
+    this.cameraPunch(0.035);
+    const t = this.add
+      .text(CX, CY, `${count} watered — the whole garden!`, {
+        fontFamily: "Trebuchet MS, sans-serif",
+        fontSize: "30px",
+        fontStyle: "bold",
+        color: "#ffffff",
+        stroke: "#3e8e52",
+        strokeThickness: 7,
+      })
+      .setOrigin(0.5)
+      .setDepth(1205)
+      .setScale(0.4)
+      .setAlpha(0);
+    this.tweens.chain({
+      targets: t,
+      tweens: [
+        { alpha: 1, scale: 1.1, duration: 320, ease: "Back.easeOut" },
+        { scale: 1, duration: 160 },
+        { alpha: 0, y: CY - 40, duration: 700, delay: 900, ease: "Sine.easeIn" },
+      ],
+      onComplete: () => t.destroy(),
+    });
+  }
+
   /** The plant drinks: a squash, a tall happy stretch, then settle. */
   private drinkGulp(i: number) {
     const img = this.plotNodes[i]?.img;
     if (!img) return;
+    const shiver = this.shivers.get(i);
+    if (shiver) { shiver.stop(); this.shivers.delete(i); }
     this.tweens.killTweensOf(img);
     img.setAngle(0).setScale(1);
     this.tweens.chain({

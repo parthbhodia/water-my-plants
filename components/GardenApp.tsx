@@ -9,6 +9,7 @@ import { sfx, music, MUSIC_MODES, type MusicMode } from "@/game/audio";
 import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
 import type { CompletedLily, GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
 import { welcomeMessage, welcomeMood, tendMessage, tendMood } from "@/lib/messages";
+import { canWaterNow } from "@/lib/species";
 import type { GuideMood } from "@/game/guide";
 import { GUIDE_NAME } from "@/game/guide";
 import GuidePortrait from "./GuidePortrait";
@@ -25,6 +26,7 @@ import TodayBrief from "./TodayBrief";
 import DecorBar from "./DecorBar";
 import RestorePanel from "./RestorePanel";
 import NextStep from "./NextStep";
+import WaterFab from "./WaterFab";
 import WeeklyGift from "./WeeklyGift";
 import Tutorial from "./Tutorial";
 import CoachMarks from "./CoachMarks";
@@ -36,6 +38,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const supabase = useMemo(() => createClient(), []);
   const bridge = useMemo(() => new GameBridge(), []);
   const [state, setState] = useState<GardenState | null>(null);
+  const stateRef = useRef<GardenState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; mood: GuideMood } | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
@@ -55,6 +58,10 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [coach, setCoach] = useState(false);
   const [guided, setGuided] = useState<null | "water">(null);
   const guidedRef = useRef<null | "water">(null);
+  // queue of plots still to water in a one-tap round
+  const [round, setRound] = useState<number[]>([]);
+  const roundRef = useRef<number[]>([]);
+  useEffect(() => { roundRef.current = round; }, [round]);
   useEffect(() => { guidedRef.current = guided; }, [guided]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acting = useRef(false);
@@ -68,6 +75,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
 
   const applyState = useCallback(
     (s: GardenState) => {
+      stateRef.current = s;
       setState(s);
       bridge.setGarden(s);
       setBriefKey((k) => k + 1);
@@ -143,7 +151,15 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
 
   // ---- scene -> React ----
   useEffect(() => {
-    bridge.onPlotTapped = (i) => setSelected(i);
+    bridge.onPlotTapped = (i) => {
+      setSelected(i);
+      // Tapping a plant that can drink right now waters it. Anything else
+      // just selects — a tap must never damage an overwaterable plant.
+      const p = stateRef.current?.plots[i];
+      if (p && canWaterNow(p.plant, stateRef.current!.hour) && !acting.current) {
+        bridge.tend(i, "water");
+      }
+    };
     bridge.onPourStart = async (plotIdx, action) => {
       if (acting.current) return;
       acting.current = true;
@@ -167,7 +183,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
         const result = data as TendResult;
         setTimeout(() => {
           bridge.applyOutcome(result);
-          if (result.state) setState(result.state);
+          if (result.state) { stateRef.current = result.state; setState(result.state); }
           if (result.status === "watered" || result.status === "fed" || result.status === "pruned") {
             sfx.splash();
             if (result.bloomedNow) sfx.bloom();
@@ -193,6 +209,30 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           if (actingTimer.current) clearTimeout(actingTimer.current);
           acting.current = false;
           setBusy(false);
+          // a one-tap round walks on to the next thirsty plant
+          const queue = roundRef.current;
+          if (queue.length) {
+            const [next, ...rest] = queue;
+            roundRef.current = rest;
+            setRound(rest);
+            bridge.setCombo(roundTotal.current - rest.length);
+            setSelected(next);
+            bridge.select(next);
+            setTimeout(() => bridge.tend(next, "water"), 420);
+          } else if (roundTotal.current > 1) {
+            // the round just finished
+            const n = roundTotal.current;
+            roundTotal.current = 0;
+            bridge.setCombo(0);
+            sfx.bloom();
+            bridge.celebrateRound(n);
+            showToast(
+              `${n} plants watered in one go${state?.displayName ? `, ${state.displayName.split(" ")[0]}` : ""} — that is the whole round done. 🌿`,
+              7000, "proud"
+            );
+          } else {
+            bridge.setCombo(0);
+          }
         }, 850);
       } catch (e) {
         bridge.applyOutcome({ status: "error" });
@@ -226,6 +266,25 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     },
     [bridge, busy]
   );
+
+  /** One tap does the whole daily round, plant by plant. */
+  const roundTotal = useRef(0);
+  const waterAll = useCallback(() => {
+    if (busy || !state) return;
+    const due = state.plots
+      .filter((p) => p.unlocked && canWaterNow(p.plant, state.hour))
+      .map((p) => p.idx);
+    if (due.length === 0) return;
+    sfx.click();
+    const [first, ...rest] = due;
+    roundTotal.current = due.length;
+    roundRef.current = rest;
+    setRound(rest);
+    bridge.setCombo(1);
+    setSelected(first);
+    bridge.select(first);
+    bridge.tend(first, "water");
+  }, [busy, state, bridge]);
 
   const plantSeed = useCallback(
     async (key: string) => {
@@ -409,6 +468,17 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           <button className="rotate-chip" onClick={() => setRotateHint(false)}>
             <RotateCw size={13} strokeWidth={2.6} aria-hidden /> Turn your phone sideways — the garden plays best in landscape
           </button>
+        )}
+
+        {state && !tutorial && !coach && (
+          <WaterFab
+            state={state}
+            selected={selected}
+            busy={busy}
+            roundLeft={round.length}
+            onWater={(i) => { setSelected(i); bridge.select(i); tend(i, "water"); }}
+            onWaterAll={waterAll}
+          />
         )}
 
         {toast && (

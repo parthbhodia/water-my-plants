@@ -131,6 +131,14 @@ for (const d of DEVICES) {
   }
 
   // ---- does the Water button actually water? ----
+  // tap-to-water may have started a pour above; a scene mid-pour correctly
+  // ignores a second request, so wait for it to settle first
+  for (let i = 0; i < 20; i++) {
+    const busy = await page.evaluate(() => window.__lilyProbe?.()?.pouring);
+    if (!busy) break;
+    await page.waitForTimeout(400);
+  }
+  await page.waitForTimeout(600);
   await page.evaluate(() => window.__sheet(true));
   await page.waitForTimeout(700);
   const camInset = await page.evaluate(() => window.__camInset?.() ?? -1);

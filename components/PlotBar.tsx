@@ -5,7 +5,7 @@ import {
   Flower2, Sprout, Skull, Plus, Clock, CircleAlert,
 } from "lucide-react";
 import type { GardenState, PlotState, TendAction } from "@/lib/types";
-import { SPECIES_BY_KEY, windowOpen, PLOT_LABEL } from "@/lib/species";
+import { SPECIES_BY_KEY, canWaterNow, PLOT_LABEL } from "@/lib/species";
 import PlantIcon from "./PlantIcon";
 
 const KIND_ICON = { sun: Sun, shade: CloudSun, water: Waves } as const;
@@ -45,8 +45,7 @@ export default function PlotBar({
   const plant = cur?.plant ?? null;
   const sp = plant ? SPECIES_BY_KEY[plant.species] : null;
 
-  const canWater =
-    !!plant && !!sp && plant.thirsty && !plant.isBloomed && !plant.dead && windowOpen(sp, state.hour);
+  const canWater = canWaterNow(plant, state.hour);
   const needsFeed = !!plant && !!sp && sp.feedsRequired > plant.feedsDone && !plant.dead;
   const needsPrune = !!plant && !!sp && sp.prunesRequired > plant.prunesDone && !plant.dead;
   const clearable = !!plant && (plant.isBloomed || plant.dead);

@@ -125,6 +125,23 @@ reflows the camera. It needs
 every panel with mock state so no login is required. Screenshots land in
 `/tmp/mobile-audit`.
 
+## Watering
+
+Three ways in, because hunting for a button is not a ritual:
+
+- **Tap the plant.** If it can drink right now (`canWaterNow` in
+  `lib/species.ts` — the one source of truth) the gardener walks over and
+  waters it. If it cannot, the tap only selects: a tap must never damage an
+  overwaterable species like the cactus.
+- **The floating button** (`WaterFab`) lives on the stage, never inside the
+  pull-up sheet, so watering is one thumb-reach on a phone.
+- **Water all** runs the day's round in sequence, walking plant to plant.
+  Each pour escalates a combo flourish and the round ends in confetti.
+
+Never kill a plant's tweens by walking `getTweensOf(...)` — chained
+animations (the drink gulp) break mid-flight and throw. Track long-lived
+tweens explicitly, like `shivers`.
+
 ## Guiding a lost player
 
 A player should never wonder what to do next:

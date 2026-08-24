@@ -2021,3 +2021,53 @@ button { font-family: var(--font); cursor: pointer; }
 @media (max-width: 920px) {
   .hud-icon-btn.hud-desk { display: none; }
 }
+
+/* ---------- Watering lives on the stage ---------- */
+.water-fab-wrap {
+  position: absolute; right: 14px; bottom: 16px; z-index: 8;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 9px;
+  pointer-events: none;
+}
+.water-fab {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 9px;
+  font: inherit; font-weight: 900; font-size: 1rem; color: #fff; cursor: pointer;
+  padding: 15px 24px; border-radius: 999px; border: none;
+  background: linear-gradient(180deg, #7fd0f0, #3f9bc4);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.5), 0 6px 0 #2f7c9e,
+    0 20px 30px -12px rgba(23,62,82,.6);
+  transition: transform .12s cubic-bezier(.34,1.56,.64,1), box-shadow .12s ease;
+  animation: fab-breathe 2.6s ease-in-out infinite;
+}
+.water-fab:active {
+  transform: translateY(4px);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.4), 0 2px 0 #2f7c9e, 0 8px 14px -6px rgba(23,62,82,.5);
+}
+.water-fab:disabled { opacity: .55; animation: none; }
+.water-fab.all {
+  font-size: .88rem; padding: 14px 19px; min-height: 44px;
+  background: linear-gradient(180deg, #ffd97a, #e8a93c);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 5px 0 #b7801f,
+    0 16px 24px -12px rgba(120,80,10,.55);
+  animation: none;
+}
+.water-fab.round {
+  pointer-events: none; background: linear-gradient(180deg, #a9d8ea, #7fb6cf);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.4), 0 5px 0 #5d90a8;
+  animation: none;
+}
+.wf-spin { display: grid; place-items: center; animation: wf-rock .9s ease-in-out infinite; }
+@keyframes wf-rock { 0%,100% { transform: rotate(-18deg); } 50% { transform: rotate(18deg); } }
+@keyframes fab-breathe {
+  0%, 100% { box-shadow: inset 0 2px 0 rgba(255,255,255,.5), 0 6px 0 #2f7c9e, 0 20px 30px -12px rgba(23,62,82,.6), 0 0 0 0 rgba(127,208,240,.55); }
+  55% { box-shadow: inset 0 2px 0 rgba(255,255,255,.5), 0 6px 0 #2f7c9e, 0 20px 30px -12px rgba(23,62,82,.6), 0 0 0 14px rgba(127,208,240,0); }
+}
+@media (prefers-reduced-motion: reduce) { .water-fab { animation: none; } .wf-spin { animation: none; } }
+/* landscape phones: clear the sheet handle */
+@media (max-width: 920px) and (orientation: landscape), (max-height: 520px) and (orientation: landscape) {
+  .water-fab-wrap { bottom: 58px; right: 12px; }
+}
+@media (max-width: 420px) {
+  .wf-label { display: none; }
+  .water-fab { padding: 16px; }
+  .water-fab.all { padding: 13px; }
+}
