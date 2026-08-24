@@ -99,6 +99,8 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     zone: Phaser.GameObjects.Zone;
     ring: Phaser.GameObjects.Graphics;
     alert: Phaser.GameObjects.Image;
+    beacon: Phaser.GameObjects.Graphics;
+    seedSign: Phaser.GameObjects.Image;
   }> = [];
   private selected = 0;
   private decorNodes: Array<{ tex: Phaser.Textures.CanvasTexture; img: Phaser.GameObjects.Image }> = [];
@@ -829,6 +831,28 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     });
 
     // ---- glossy hint droplet (2x) ----
+    // ---- "plant here" sign: a little seed packet on a stake (2x) ----
+    this.ctex("plantsign", 96, 112, (c) => {
+      c.scale(2, 2);
+      // stake
+      c.fillStyle = "#8a6138";
+      rr(c, 22.5, 30, 3, 22, 1.5); c.fill();
+      // packet
+      c.fillStyle = lg(c, 0, 6, 0, 34, [[0, "#fffdf2"], [1, "#f0e4c4"]]);
+      rr(c, 8, 6, 32, 28, 4); c.fill();
+      c.strokeStyle = "#c9a35a"; c.lineWidth = 2;
+      rr(c, 8, 6, 32, 28, 4); c.stroke();
+      // a sprout drawn on the packet
+      c.strokeStyle = "#3e8e52"; c.lineWidth = 2.4; c.lineCap = "round";
+      c.beginPath(); c.moveTo(24, 28); c.lineTo(24, 17); c.stroke();
+      c.fillStyle = "#5cb46a";
+      ell(c, 19.5, 16, 5, 3.4); c.fill();
+      ell(c, 28.5, 14, 5, 3.4); c.fill();
+      // a couple of seeds at the base
+      c.fillStyle = "#8a6a3f";
+      ell(c, 20, 30, 2, 1.4); c.fill(); ell(c, 27, 30.5, 2, 1.4); c.fill();
+    });
+
     // ---- distress bubble: shown over a plant on its final day (2x) ----
     this.ctex("distress", 96, 112, (c) => {
       c.scale(2, 2);
@@ -1312,6 +1336,28 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
       const zone = this.add.zone(pl.x, pl.y - 20, 76, 86).setDepth(30);
 
+      // empty-plot beacon: a breathing ring and a bobbing trowel sign, so a
+      // lost player can see at a glance where a seed can go
+      const beacon = this.add.graphics().setDepth(YARD + pl.y - 0.45).setVisible(false);
+      beacon.lineStyle(3, 0xffd76e, 0.85);
+      beacon.strokeEllipse(pl.x, pl.y + 3, 60, 24);
+      beacon.lineStyle(2, 0xfff3c4, 0.55);
+      beacon.strokeEllipse(pl.x, pl.y + 3, 42, 17);
+      this.tweens.add({
+        targets: beacon, alpha: { from: 0.95, to: 0.35 },
+        scaleX: 1.08, scaleY: 1.08,
+        duration: 1100, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
+      });
+      const seedSign = this.add
+        .image(pl.x, pl.y - 60, "plantsign")
+        .setScale(0.5)
+        .setDepth(YARD + pl.y + 5)
+        .setVisible(false);
+      this.tweens.add({
+        targets: seedSign, y: pl.y - 70,
+        duration: 900, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
+      });
+
       // final-day distress: a pulsing ring on the ground, a big bubble above
       const ring = this.add.graphics().setDepth(YARD + pl.y - 0.4).setVisible(false);
       ring.lineStyle(4, 0xd9503c, 0.75);
@@ -1333,7 +1379,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         duration: 620, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
       });
 
-      this.plotNodes.push({ tex, img, bed, lock, marker, zone, ring, alert });
+      this.plotNodes.push({ tex, img, bed, lock, marker, zone, ring, alert, beacon, seedSign });
     });
   }
 
@@ -1417,6 +1463,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     const lastDay = !!plant && !plant.dead && !plant.isBloomed && plant.overdueDays >= 3;
     node.ring.setVisible(lastDay);
     node.alert.setVisible(lastDay);
+    // an unlocked, empty plot invites a seed
+    const inviting = unlocked && !plant;
+    node.beacon.setVisible(inviting);
+    node.seedSign.setVisible(inviting);
     if (!plant) {
       node.img.setVisible(false);
       return;

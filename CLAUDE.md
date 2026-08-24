@@ -74,6 +74,56 @@ target}` for movement assertions. Headless Chromium renders ~8fps; player
 movement uses wall-clock time so speeds still hold, but allow generous
 waits before screenshots.
 
+## Mobile is the primary target
+
+Most players arrive on a phone. Treat mobile as the default case, not an
+adaptation, and hold to these rules:
+
+- **Every control clears 44x44px on coarse pointers.** The global rule
+  lives at the end of `globals.css` under "Touch targets". Small text
+  links get vertical padding rather than a bigger font. Never ship a
+  control that only a mouse can hit.
+- **Never rely on hover.** Hover styling may decorate, never inform —
+  anything a player must know has to be visible at rest.
+- **No horizontal overflow, ever.** Wide rows (`.plot-chips`, `.seed-grid`,
+  `.shop-grid`) wrap or scroll inside their own container.
+- **Respect the safe area** on anything pinned to a screen edge
+  (`env(safe-area-inset-*)`), or the notch and home bar will eat it.
+- **The game canvas uses `Phaser.CANVAS`, not WebGL.** iOS Safari's
+  texture-memory ceiling kills a WebGL boot on a scene this texture-heavy;
+  all art here is painted canvas anyway, so the 2D renderer costs nothing.
+  Boot failures must stay visible (error text + retry), never a silent
+  spinner.
+- **Landscape is the recommended orientation** and the installed PWA locks
+  to it; in the browser, portrait still works and only *invites* rotation.
+  Never block play on orientation.
+- **Touch devices never see keyboard copy** — no W A S D, no "press E".
+  Gate on `matchMedia("(pointer: coarse)")`.
+
+### Testing mobile
+
+`node scripts/mobile-audit.mjs` walks the landing page and every garden
+panel across three phone viewports and reports horizontal overflow,
+sub-44px tap targets, controls pushed off-screen, and page errors.
+**It must print `0 findings` before shipping UI work.** It needs
+`npm run start` on :3000 and the `app/dev-mobile` fixture, which mounts
+every panel with mock state so no login is required. Screenshots land in
+`/tmp/mobile-audit`.
+
+## Guiding a lost player
+
+A player should never wonder what to do next:
+
+- `components/NextStep.tsx` sits above the plot chips and names one
+  action, in priority order — dying plant, thirsty plant, empty plot,
+  ready bloom — with the plot number and a button that jumps there.
+- Empty unlocked plots carry a breathing gold ring and a bobbing
+  seed-packet sign in the scene, so "where can I plant?" is answered by
+  looking.
+- First-timers get: Granny's tutorial → guided first planting (camera
+  dives in, holds through the first watering) → coach marks over the real
+  interface. Each hands off to the next; they never overlap.
+
 ## Conventions
 
 - Branch: `claude/lily-days-game-al8cgd` only.

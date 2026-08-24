@@ -102,6 +102,7 @@ export default async function LandingPage() {
             <Link href="/how-to-play">How to play</Link> ·{" "}
             <Link href="/plants">Plant guides</Link>
           </p>
+          <p className="hero-note">On a phone, turn it sideways — the garden fills the screen in landscape.</p>
         </div>
         <div className="hero-auth">
           <AuthForm />

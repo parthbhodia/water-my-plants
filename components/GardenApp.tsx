@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 import { GameBridge } from "@/game/bridge";
+import { RotateCw } from "lucide-react";
 import { sfx, music, MUSIC_MODES, type MusicMode } from "@/game/audio";
 import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
 import type { CompletedLily, GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
@@ -23,6 +24,7 @@ import LeagueRail from "./LeagueRail";
 import TodayBrief from "./TodayBrief";
 import DecorBar from "./DecorBar";
 import RestorePanel from "./RestorePanel";
+import NextStep from "./NextStep";
 import WeeklyGift from "./WeeklyGift";
 import Tutorial from "./Tutorial";
 import CoachMarks from "./CoachMarks";
@@ -368,7 +370,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
 
         {state && rotateHint && (
           <button className="rotate-chip" onClick={() => setRotateHint(false)}>
-            Rotate for full screen ↻
+            <RotateCw size={13} strokeWidth={2.6} aria-hidden /> Turn your phone sideways — the garden plays best in landscape
           </button>
         )}
 
@@ -401,6 +403,17 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             {tab === "garden" && <TodayBrief refreshKey={briefKey} />}
             {tab === "garden" && (
               <WeeklyGift refreshKey={briefKey} onState={applyState} showToast={showToast} />
+            )}
+            {tab === "garden" && (
+              <NextStep
+                state={state}
+                onGo={(idx, plant) => {
+                  sfx.click();
+                  setSelected(idx);
+                  bridge.select(idx);
+                  if (plant) setSeedFor(state.plots[idx]);
+                }}
+              />
             )}
             {tab === "garden" && (
               <PlotBar

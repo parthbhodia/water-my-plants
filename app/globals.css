@@ -1911,3 +1911,98 @@ button { font-family: var(--font); cursor: pointer; }
   .hud-statrow .stat { font-size: .8rem; padding: 3px 9px; }
   .panel-wrap { padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
+
+/* ============================================================
+   Touch targets — the whole-app rule.
+   On coarse pointers every control clears 44px in the direction
+   a thumb actually misses. Verified by scripts/mobile-audit.mjs.
+   ============================================================ */
+@media (pointer: coarse) {
+  .btn,
+  .btn.small,
+  .tabbar button,
+  .plot-chip,
+  .gift-card,
+  .style-chip,
+  .bp-hour,
+  .decor-chip,
+  .seed-card,
+  .shop-card .btn,
+  .install-close,
+  .brief-cog,
+  .sheet-handle {
+    min-height: 44px;
+  }
+  .btn.small { padding-top: 11px; padding-bottom: 11px; }
+  .hud-icon-btn { min-width: 44px; min-height: 44px; }
+  .stat.tappable { min-height: 44px; padding: 11px 14px; }
+  .stat { min-height: 34px; padding: 7px 13px; }
+  .swatch { width: 46px; height: 46px; }
+  /* the dot stays small; its hit box does not */
+  .tut-dot {
+    width: 44px; height: 44px; border: none; background: none; position: relative;
+  }
+  .tut-dot::after {
+    content: ""; position: absolute; inset: 0; margin: auto;
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1px solid rgba(139,105,62,.4); background: rgba(255,255,255,.7);
+  }
+  .tut-dot.past::after { background: rgba(93,155,106,.55); }
+  .tut-dot.on::after { background: var(--leaf-deep); transform: scale(1.45); }
+  .tut-dots { gap: 0; }
+  .tut-skip { min-height: 44px; padding: 0 8px; }
+  .brief-cog { min-width: 44px; }
+  .install-close { min-width: 44px; }
+  /* inline text links in prose get a bigger hit box without moving visually */
+  .hero-links a, .lp-sub a, .auth-switch button,
+  .foot-col a, .foot-plants a, .foot-note a,
+  .plant-table a, .faq-item a, .profile-meta a {
+    display: inline-block; padding: 16px 4px;
+  }
+  input, select, textarea { min-height: 44px; }
+  .rename input { min-height: 44px; }
+  .foot-col li, .foot-plants li { line-height: 1; }
+}
+
+/* ---------- Next step: the always-visible answer to "now what?" ---------- */
+.next-step {
+  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+  font: inherit; cursor: pointer; margin-bottom: 10px;
+  background: linear-gradient(180deg, #eaf7ff, #d3ebf8);
+  border: 2px solid rgba(90,160,200,.35); border-radius: var(--radius);
+  padding: 11px 13px;
+  box-shadow: inset 0 1px 0 #fff, 0 8px 18px -10px rgba(31,61,45,.35);
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+.next-step:hover { transform: translateY(-2px); }
+.next-step.k-empty { background: linear-gradient(180deg, #f1faf1, #dcf0de); border-color: rgba(62,142,82,.35); }
+.next-step.k-dying { background: linear-gradient(180deg, #fff0ec, #f8ddd6); border-color: rgba(200,90,70,.4); }
+.next-step.k-harvest { background: linear-gradient(180deg, #fff6fa, #ffe4ef); border-color: rgba(212,113,143,.4); }
+.next-step.k-done { background: var(--glass); border-color: var(--glass-border); cursor: default; }
+.ns-icon {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px;
+  border-radius: 13px; background: rgba(255,255,255,.75); color: var(--pond-deep);
+  box-shadow: inset 0 1px 0 #fff;
+}
+.next-step.k-empty .ns-icon { color: var(--leaf-deep); }
+.next-step.k-dying .ns-icon { color: #b2483a; }
+.next-step.k-harvest .ns-icon { color: #d4718f; }
+.ns-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.ns-text b { font-size: .96rem; }
+.ns-text span { font-size: .82rem; color: var(--ink-soft); line-height: 1.35; }
+.ns-cta {
+  flex: none; font-size: .8rem; font-weight: 900; color: #fff;
+  background: linear-gradient(180deg, #6fc4e8, #3f9bc4);
+  border-radius: 999px; padding: 8px 14px;
+  box-shadow: 0 3px 0 #2f7c9e;
+}
+.next-step.k-empty .ns-cta { background: linear-gradient(180deg, #7fd08c, #4a9b5e); box-shadow: 0 3px 0 #37814a; }
+.next-step.k-dying .ns-cta { background: linear-gradient(180deg, #f08a72, #d9503c); box-shadow: 0 3px 0 #a83a2a; }
+.next-step.k-harvest .ns-cta { background: linear-gradient(180deg, #f5a8c4, #d4718f); box-shadow: 0 3px 0 #a8536d; }
+@media (max-width: 460px) {
+  .next-step { flex-wrap: wrap; }
+  .ns-cta { width: 100%; text-align: center; }
+}
+.rotate-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 92vw; line-height: 1.3; }
+.hero-note { margin: 6px 0 0; font-size: .82rem; color: var(--ink-soft); font-weight: 600; }
+@media (pointer: fine) { .hero-note { display: none; } }
