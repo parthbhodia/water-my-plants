@@ -68,6 +68,11 @@ export type GardenState = {
   canChangeTimezone?: boolean;
   timezoneChangeableOn?: string;
   gardenScore: number;
+  /** Total dewdrops ever earned — never spent down; this is what levels you. */
+  lifetimeEarned?: number;
+  /** Lifetime earned needed for the current level, and for the next one. */
+  levelFloor?: number;
+  nextLevelAt?: number;
   completedCount: number;
   tutorialDone: boolean;
   zones: ZoneState[];

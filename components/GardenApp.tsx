@@ -27,6 +27,7 @@ import DecorBar from "./DecorBar";
 import RestorePanel from "./RestorePanel";
 import NextStep from "./NextStep";
 import MusicPicker from "./MusicPicker";
+import LevelBar from "./LevelBar";
 import PlantCard from "./PlantCard";
 import WaterFab from "./WaterFab";
 import WeeklyGift from "./WeeklyGift";
@@ -592,52 +593,58 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             badge={{ garden: needCare }}
           />
           <div className="panel-body">
-            {tab === "garden" && <TodayBrief refreshKey={briefKey} />}
+            {/*
+              Garden is only what you act on right now: today's news, the one
+              next thing to do, the plant you have selected, and your plots.
+              Decor and Restoration both spend dewdrops on scenery, so they
+              live with the Shop — stacking all seven here meant nobody could
+              tell which panel was the one that wanted them.
+            */}
             {tab === "garden" && (
-              <WeeklyGift refreshKey={briefKey} onState={applyState} showToast={showToast} />
-            )}
-            {tab === "garden" && (
-              <NextStep
-                state={state}
-                onGo={(idx, plant) => {
-                  sfx.click();
-                  setSelected(idx);
-                  bridge.select(idx);
-                  if (plant) setSeedFor(state.plots[idx]);
-                }}
-              />
-            )}
-            {tab === "garden" && <PlantCard state={state} selected={selected} />}
-            {tab === "garden" && (
-              <PlotBar
-                state={state}
-                selected={selected}
-                busy={busy}
-                onSelect={selectPlot}
-                onTend={tend}
-                onPlant={(p) => { sfx.click(); setSeedFor(p); }}
-                onClear={clearPlot}
-                onRevive={revivePlot}
-              />
-            )}
-            {tab === "garden" && (
-              <DecorBar state={state} onState={applyState} showToast={showToast} />
-            )}
-            {tab === "garden" && (
-              <RestorePanel state={state} onState={applyState} showToast={showToast} />
+              <>
+                <TodayBrief refreshKey={briefKey} />
+                <WeeklyGift refreshKey={briefKey} onState={applyState} showToast={showToast} />
+                <NextStep
+                  state={state}
+                  onGo={(idx, plant) => {
+                    sfx.click();
+                    setSelected(idx);
+                    bridge.select(idx);
+                    if (plant) setSeedFor(state.plots[idx]);
+                  }}
+                />
+                <PlantCard state={state} selected={selected} />
+                <PlotBar
+                  state={state}
+                  selected={selected}
+                  busy={busy}
+                  onSelect={selectPlot}
+                  onTend={tend}
+                  onPlant={(p) => { sfx.click(); setSeedFor(p); }}
+                  onClear={clearPlot}
+                  onRevive={revivePlot}
+                />
+              </>
             )}
             {tab === "shop" && (
-              <ShopPanel state={state} onBought={applyState} showToast={showToast} />
+              <>
+                <ShopPanel state={state} onBought={applyState} showToast={showToast} />
+                <DecorBar state={state} onState={applyState} showToast={showToast} />
+                <RestorePanel state={state} onState={applyState} showToast={showToast} />
+              </>
             )}
             {tab === "profile" && (
-              <ProfilePanel
-                state={state}
-                avatar={avatar}
-                onPreview={(a) => bridge.setAvatar(a)}
-                onSave={saveAvatar}
-                onState={applyState}
-                showToast={showToast}
-              />
+              <>
+                <LevelBar state={state} />
+                <ProfilePanel
+                  state={state}
+                  avatar={avatar}
+                  onPreview={(a) => bridge.setAvatar(a)}
+                  onSave={saveAvatar}
+                  onState={applyState}
+                  showToast={showToast}
+                />
+              </>
             )}
             {tab === "league" && <Leaderboard showToast={showToast} />}
           </div>

@@ -211,6 +211,49 @@ it. Tapping a plant that cannot drink only selects it, and `WaterFab` routes
 to a plant that can — so the UI cannot rot a cactus. The card explains why
 the button is pointing elsewhere.
 
+## Panels: one job per tab
+
+The pull-up sheet had all seven panels stacked under **Garden** and nobody
+could tell which one wanted them. The split is by *what the player is
+doing*, not by what the feature is:
+
+- **Garden** — only what you act on now: `TodayBrief`, `WeeklyGift`,
+  `NextStep`, `PlantCard`, `PlotBar`.
+- **Shop** — everything that spends dewdrops on things: `ShopPanel`,
+  `DecorBar`, `RestorePanel`.
+- **Profile** — you: `LevelBar` then `ProfilePanel`.
+- **League** — `Leaderboard`.
+
+Resist adding a sixth thing to Garden. If it is not an action available
+right now, it belongs in another tab.
+
+## Gardener level has to explain itself
+
+Level rises with **lifetime** dewdrops (`gardener_level(le) =
+floor(sqrt(le / 40)) + 1`), never reduced by spending — it is a record of
+care given, which is why it can gate scenery without making it purchasable.
+Rungs: L2=40, L3=160, L4=360, L5=640, L6=1000, L7=1440 (`level_floor()`).
+
+`garden_state_json` ships `lifetimeEarned`, `levelFloor` and `nextLevelAt`
+so `components/LevelBar.tsx` can draw a real bar and name the next unlock.
+A locked restoration zone shows its fixtures in silhouette and the distance
+in dewdrops — a padlock with a bare level number gives the player nothing
+to want.
+
+## Audio only survives if you keep asking
+
+`music.start()` is safe to call repeatedly and must stay that way. iOS
+suspends the AudioContext whenever the tab is backgrounded or the phone
+locks and never resumes it on its own, so the gesture listener spans
+several event types, keeps listening until `music.playing` is true, and
+re-fires on `visibilitychange`. A single `once: true` listener silently
+lost the music the first time somebody pocketed their phone.
+
+`resume()` is async: anchor the schedule only *after* the context is
+running, or every event lands in a `currentTime` still frozen at the moment
+of suspension. And watch the master gain — 0.055 was a loop running
+perfectly that nobody could hear.
+
 ## Guiding a lost player
 
 A player should never wonder what to do next:

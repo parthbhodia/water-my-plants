@@ -2275,3 +2275,63 @@ button { font-family: var(--font); cursor: pointer; }
   margin: 12px 0 0; padding: 10px 12px; border-radius: 12px;
   background: #f0f7ff; color: #26435c; font-size: .82rem; line-height: 1.5;
 }
+
+/* ---------- What "gardener level" actually means ----------
+   The number used to appear beside the player's name with no bar, no
+   threshold and no stated purpose, while silently gating the restoration
+   zones. Now it says what it counts and what it is about to open. */
+.level-bar {
+  background: linear-gradient(165deg, #fffdf4, #f6f1e0);
+  border: 1px solid rgba(190,178,145,.45);
+  border-radius: 16px; padding: 14px 14px 13px; margin: 0 0 12px;
+}
+.level-bar.compact { margin: 4px 0 12px; padding: 12px; }
+.lb-top { display: flex; align-items: center; gap: 12px; }
+.lb-badge {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #ffe9a8, #c9a227);
+  color: #6b4c05; font-weight: 900; font-size: 1.22rem;
+  box-shadow: inset 0 -2px 0 rgba(120,88,10,.3);
+}
+.lb-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lb-id b { font-size: .98rem; }
+.lb-id > span {
+  font-size: .8rem; color: var(--ink-soft);
+  display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap;
+}
+.lb-track {
+  height: 10px; border-radius: 999px; margin: 11px 0 0;
+  background: #e6ded0; overflow: hidden;
+}
+.lb-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #8fd48a, #3e8e52);
+  transition: width .5s cubic-bezier(.22,.65,.3,1);
+}
+.lb-what, .lb-next {
+  display: flex; gap: 7px; align-items: flex-start;
+  margin: 11px 0 0; font-size: .81rem; line-height: 1.5; color: var(--ink-soft);
+}
+.lb-what svg, .lb-next svg { flex: 0 0 auto; margin-top: 2px; }
+.lb-next {
+  padding: 9px 11px; border-radius: 11px;
+  background: #f4f9f2; color: var(--ink);
+}
+
+/* A locked corner shows its contents in silhouette — a padlock with a bare
+   level number gives the player nothing to actually want. */
+.restore-row.peek { opacity: 1; }
+.restore-card.ghost {
+  background: repeating-linear-gradient(
+    -45deg, #f4f2ea, #f4f2ea 7px, #eeece2 7px, #eeece2 14px);
+  border: 1px dashed rgba(150,140,115,.55);
+  color: var(--ink-soft);
+}
+.restore-card.ghost .restore-icon { opacity: .5; }
+.restore-card.ghost .restore-meta b { color: var(--ink-soft); }
+.restore-cost-ghost {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .82rem; font-weight: 700; color: var(--ink-soft);
+  padding: 6px 8px; white-space: nowrap;
+}
