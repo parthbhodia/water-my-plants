@@ -96,11 +96,16 @@ export const sfx = new Sfx();
 // a pentatonic music box answers, a feedback delay gives it air.
 // ============================================================
 
-export type MusicMode = "meadow" | "twilight" | "rain";
-export const MUSIC_MODES: Array<{ key: MusicMode; name: string }> = [
-  { key: "meadow", name: "Sunny Meadow" },
-  { key: "twilight", name: "Twilight Pond" },
-  { key: "rain", name: "Gentle Rain" },
+export type MusicMode =
+  | "meadow" | "twilight" | "rain" | "dawn" | "night" | "snow";
+
+export const MUSIC_MODES: Array<{ key: MusicMode; name: string; blurb: string }> = [
+  { key: "meadow",   name: "Sunny Meadow",  blurb: "Bright and open. Midday in the long grass." },
+  { key: "dawn",     name: "Dawn Chorus",   blurb: "First light. Everything waking up at once." },
+  { key: "twilight", name: "Twilight Pond", blurb: "Slower and darker, the way evenings go." },
+  { key: "night",    name: "Night Garden",  blurb: "Sparse and low. Crickets and not much else." },
+  { key: "rain",     name: "Gentle Rain",   blurb: "Soft rain on leaves, and plinks like drops." },
+  { key: "snow",     name: "Winter Hush",   blurb: "Wide, slow and very quiet. Nothing hurries." },
 ];
 
 type MoodDef = {
@@ -136,6 +141,37 @@ const MOODS: Record<MusicMode, MoodDef> = {
     notes: [440.0, 523.25, 587.33, 659.25, 783.99, 880.0, 1046.5],
     chordEvery: 11, pluckChance: 0.55, filterHz: 1500, padGain: 0.14, rain: false,
   },
+  dawn: {
+    // G6 -> Em7 -> Cmaj9 -> D — bright and busy, the light coming up
+    chords: [
+      [98.0, 146.83, 196.0, 246.94],
+      [82.41, 123.47, 164.81, 196.0],
+      [130.81, 196.0, 246.94, 293.66],
+      [146.83, 220.0, 293.66, 369.99],
+    ],
+    notes: [587.33, 659.25, 783.99, 880.0, 987.77, 1174.7, 1318.5, 1567.98],
+    chordEvery: 7, pluckChance: 0.9, filterHz: 3000, padGain: 0.17, rain: false,
+  },
+  night: {
+    // Dm(add9) -> Bb -> Gm7 -> A, very sparse and an octave down
+    chords: [
+      [73.42, 110.0, 146.83, 164.81],
+      [58.27, 116.54, 146.83, 174.61],
+      [49.0, 116.54, 146.83, 174.61],
+      [55.0, 110.0, 164.81, 207.65],
+    ],
+    notes: [293.66, 349.23, 392.0, 440.0, 587.33, 698.46],
+    chordEvery: 15, pluckChance: 0.32, filterHz: 1100, padGain: 0.15, rain: false,
+  },
+  snow: {
+    // Ebmaj7 -> Bbmaj7, two chords and a lot of air between them
+    chords: [
+      [77.78, 155.56, 196.0, 233.08],
+      [58.27, 116.54, 174.61, 233.08],
+    ],
+    notes: [622.25, 698.46, 783.99, 932.33, 1046.5, 1244.5, 1396.9],
+    chordEvery: 18, pluckChance: 0.28, filterHz: 2600, padGain: 0.13, rain: false,
+  },
   rain: {
     // sparse Fmaj7 / Cmaj7 under soft rain, plinks like drops on a leaf
     chords: [
@@ -150,6 +186,7 @@ const MOODS: Record<MusicMode, MoodDef> = {
 class Music {
   private ctx: AudioContext | null = null;
   private out: BiquadFilterNode | null = null;
+  private master: GainNode | null = null;
   private delay: DelayNode | null = null;
   private rainSrc: AudioBufferSourceNode | null = null;
   private rainGain: GainNode | null = null;
@@ -164,9 +201,9 @@ class Music {
     if (typeof window === "undefined") return;
     const stored = window.localStorage.getItem("lily-music-mode");
     if (stored === "off") this.on = false;
-    else if (stored === "twilight" || stored === "rain" || stored === "meadow") {
+    else if (stored && MUSIC_MODES.some((m) => m.key === stored)) {
       this.on = true;
-      this.mode = stored;
+      this.mode = stored as MusicMode;
     }
   }
 
@@ -185,18 +222,39 @@ class Music {
     this.start();
   }
 
-  /** Call from any user gesture; autoplay rules need one. */
+  /** True only when audio is genuinely coming out right now. */
+  get playing() {
+    return !!this.timer && this.ctx?.state === "running";
+  }
+
+  /**
+   * Call from any user gesture; autoplay rules need one. Safe to call
+   * repeatedly — iOS suspends the context whenever the tab is backgrounded
+   * or the phone locks, and never resumes it on its own, so the only way
+   * music survives a pocket is to keep asking.
+   */
   start() {
-    if (!this.on || sfx.muted || typeof window === "undefined" || this.timer) return;
+    if (!this.on || sfx.muted || typeof window === "undefined") return;
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
     if (!this.ctx) this.ctx = new AC();
-    if (this.ctx.state === "suspended") void this.ctx.resume();
+    if (this.ctx.state === "suspended") {
+      // resume() is async: anchoring the schedule now would stamp every
+      // event into a currentTime that is still frozen at the moment of
+      // suspension, and the loop would sit silent waiting for the clock to
+      // catch up. Re-enter once the context is actually running instead.
+      void this.ctx.resume().then(() => this.start()).catch(() => {});
+      return;
+    }
+    if (this.timer) return;
     const ctx = this.ctx;
 
     if (!this.out) {
       const master = ctx.createGain();
-      master.gain.value = 0.055;
+      // 0.055 was effectively silent on a phone speaker — the loop was
+      // running the whole time and nobody could hear a note of it.
+      master.gain.value = 0.16;
+      this.master = master;
       const lp = ctx.createBiquadFilter();
       lp.type = "lowpass";
       const delay = ctx.createDelay(1.2);

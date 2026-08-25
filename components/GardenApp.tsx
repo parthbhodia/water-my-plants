@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 import { GameBridge } from "@/game/bridge";
-import { RotateCw } from "lucide-react";
+import { RotateCw, X } from "lucide-react";
 import { sfx, music, MUSIC_MODES, type MusicMode } from "@/game/audio";
 import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
 import type { CompletedLily, GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
@@ -26,6 +26,7 @@ import TodayBrief from "./TodayBrief";
 import DecorBar from "./DecorBar";
 import RestorePanel from "./RestorePanel";
 import NextStep from "./NextStep";
+import MusicPicker from "./MusicPicker";
 import PlantCard from "./PlantCard";
 import WaterFab from "./WaterFab";
 import WeeklyGift from "./WeeklyGift";
@@ -55,7 +56,13 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [briefKey, setBriefKey] = useState(0);
   const [tutorial, setTutorial] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [rotateHint, setRotateHint] = useState(true);
+  // The landscape nudge is a suggestion, not a gate — once somebody has waved
+  // it away it must never come back and pester them again.
+  const [rotateHint, setRotateHint] = useState(false);
+  const dismissRotate = useCallback(() => {
+    setRotateHint(false);
+    try { window.localStorage.setItem("lily-rotate-done", "1"); } catch {}
+  }, []);
   const [coach, setCoach] = useState(false);
   const [guided, setGuided] = useState<null | "water">(null);
   const guidedRef = useRef<null | "water">(null);
@@ -111,10 +118,53 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     setMuted(sfx.muted);
     setMusicOn(music.on);
     setMusicMode(music.mode);
-    const kick = () => music.start();
-    window.addEventListener("pointerdown", kick, { once: true });
-    return () => window.removeEventListener("pointerdown", kick);
+    /*
+     * Autoplay rules need a gesture, and iOS suspends the context again every
+     * time the tab is backgrounded or the phone locks. A single once:true
+     * pointerdown listener therefore got exactly one chance and gave up — put
+     * the phone down mid-round and the music never came back.
+     *
+     * So: listen on several gesture types, keep listening until audio is
+     * genuinely running, and try again whenever the page becomes visible.
+     */
+    const kick = () => {
+      music.start();
+      if (music.playing) detach();
+    };
+    const events = ["pointerdown", "touchend", "click", "keydown"] as const;
+    const detach = () => events.forEach((e) => window.removeEventListener(e, kick));
+    events.forEach((e) => window.addEventListener(e, kick, { passive: true }));
+
+    // portrait-only nudge, shown once ever, and it gives up by itself
+    try {
+      if (!window.localStorage.getItem("lily-rotate-done")) setRotateHint(true);
+    } catch { setRotateHint(true); }
+
+    const rotateTimer = setTimeout(() => setRotateHint(false), 12000);
+
+    const onVisible = () => { if (!document.hidden) music.start(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      detach();
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      clearTimeout(rotateTimer);
+    };
   }, []);
+
+  // Tapping anywhere else waves the nudge away too — a hint you cannot get
+  // rid of by touching the thing behind it just reads as broken.
+  useEffect(() => {
+    if (!rotateHint) return;
+    const away = (e: PointerEvent) => {
+      if ((e.target as HTMLElement)?.closest?.(".rotate-chip")) return;
+      dismissRotate();
+    };
+    window.addEventListener("pointerdown", away, { passive: true });
+    return () => window.removeEventListener("pointerdown", away);
+  }, [rotateHint, dismissRotate]);
 
   useEffect(() => {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -413,26 +463,23 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   }, []);
 
   // one button, four states: each press moves to the next record, then off
-  const cycleMusic = useCallback(() => {
-    sfx.click();
-    if (!music.on) {
-      music.setMode(MUSIC_MODES[0].key);
-      setMusicOn(true);
-      setMusicMode(MUSIC_MODES[0].key);
-      showToast(`Granny put on "${MUSIC_MODES[0].name}". 🎶`, 3500, "happy");
-      return;
-    }
-    const i = MUSIC_MODES.findIndex((m) => m.key === music.mode);
-    if (i < MUSIC_MODES.length - 1) {
-      const next = MUSIC_MODES[i + 1];
-      music.setMode(next.key);
-      setMusicMode(next.key);
-      showToast(`Granny put on "${next.name}". 🎶`, 3500, "happy");
-    } else {
+  const [musicOpen, setMusicOpen] = useState(false);
+
+  const pickMusic = useCallback((mode: MusicMode | "off") => {
+    if (mode === "off") {
       music.setOn(false);
       setMusicOn(false);
       showToast("Granny lifted the needle — just the garden now.", 3500, "sleepy");
+    } else {
+      // setMode restarts the loop, and this click is the gesture the
+      // browser was waiting for, so it starts audible straight away
+      music.setMode(mode);
+      setMusicOn(true);
+      setMusicMode(mode);
+      const name = MUSIC_MODES.find((m) => m.key === mode)?.name ?? "";
+      showToast(`Granny put on "${name}".`, 3200, "happy");
     }
+    setMusicOpen(false);
   }, [showToast]);
 
   const needCare = state
@@ -469,7 +516,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             onLeague={() => { sfx.click(); setTab("league"); }}
             onHelp={() => { sfx.click(); setTutorial(true); }}
             onToggleMute={toggleMute}
-            onToggleMusic={cycleMusic}
+            onToggleMusic={() => { sfx.click(); setMusicOpen(true); }}
             musicOn={musicOn}
             musicName={MUSIC_MODES.find((m) => m.key === musicMode)?.name ?? ""}
             onSignOut={signOut}
@@ -489,8 +536,14 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
         )}
 
         {state && rotateHint && (
-          <button className="rotate-chip" onClick={() => setRotateHint(false)}>
-            <RotateCw size={14} strokeWidth={2.6} aria-hidden /> Turn sideways for the full garden
+          <button
+            className="rotate-chip"
+            onClick={dismissRotate}
+            aria-label="Turn sideways for the full garden — dismiss"
+          >
+            <RotateCw size={14} strokeWidth={2.6} aria-hidden />
+            <span>Turn sideways for the full garden</span>
+            <X size={15} strokeWidth={2.8} className="rc-x" aria-hidden />
           </button>
         )}
 
@@ -504,6 +557,14 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             onWaterAll={waterAll}
           />
         )}
+
+        <MusicPicker
+          open={musicOpen}
+          current={musicMode}
+          isOn={musicOn}
+          onPick={pickMusic}
+          onClose={() => setMusicOpen(false)}
+        />
 
         {toast && (
           <div className="toast guide-toast">
