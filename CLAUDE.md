@@ -58,6 +58,28 @@ with a terminal `raise exception 'TESTRESULT ...'` so everything rolls back;
 impersonate a user inside the DO block with:
 `perform set_config('request.jwt.claims', json_build_object('sub', v_uid, 'role','authenticated')::text, true);`
 
+### The RPC smoke test — run it after ANY database change
+
+`supabase/tests/rpc_smoke.sql` executes **every** RPC the client calls, as a
+real impersonated user, and ends in a deliberate exception so it all rolls
+back. Read the `TESTRESULT` line: it must say `ALL PASS`.
+
+This exists because the league went down in production for every player —
+`close_season()` passed a `bigint` to `league_promote_n(integer)` — and
+`npm run build`, `tsc --noEmit` **and** the mobile audit all reported clean,
+because not one of them ever executes an RPC. A function can be missing,
+mistyped or ungranted and every other gate still says fine. The test is
+verified to catch that exact regression when it is reintroduced.
+
+Validation guards firing are **not** failures — the test feeds valid inputs
+so each body actually runs, and asserts separately that `add_friend` and
+`visit_water` still refuse bad input. Two gotchas it encodes: `clear_plot`
+gates on the `is_bloomed` *flag*, not `bloomed_at` (separate columns), and
+`revive_plant` needs a tonic bought first.
+
+Also run `get_advisors` after DDL: it is what caught `anon` being able to
+call `restore_fixture` and `claim_weekly_gift`.
+
 ## Testing the UI
 
 The sandbox proxy blocks browser→Supabase, so no logged-in E2E. Instead:
