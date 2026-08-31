@@ -9,7 +9,7 @@ type Mark = { sel: string; text: string; place: "above" | "below" };
 const MARKS: Mark[] = [
   { sel: ".plot-chips", text: "Your plots live here. Tap one to pick it.", place: "below" },
   { sel: ".plot-buttons", text: "And this waters whichever plot you picked.", place: "above" },
-  { sel: ".tabbar", text: "The Shed, your profile and the league live up here.", place: "below" },
+  { sel: ".tabbar", text: "Shop, your profile and the league live up here.", place: "below" },
   { sel: ".hud-card", text: "Dewdrops and points — you earn both by showing up.", place: "below" },
 ];
 
