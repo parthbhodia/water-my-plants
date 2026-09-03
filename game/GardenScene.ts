@@ -1000,6 +1000,28 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     g.fillStyle(0xffffff, 1);
     g.fillRoundedRect(0, 0, 10, 6, 3);
     g.generateTexture("petalbit", 10, 6);
+    // Phaser.CANVAS ignores setTint entirely — its batchSprite reads only
+    // blendMode and alpha before drawImage, and the canvas renderer contains
+    // no reference to tintTopLeft at all. So a "dust brown" leaf made by
+    // tinting the white petalbit rendered as WHITE: celebratory confetti
+    // falling on a dead plant. Anything that needs a colour needs its own
+    // painted texture.
+    g.clear();
+    g.fillStyle(0x8a7358, 1);
+    g.fillRoundedRect(0, 0, 10, 6, 3);
+    g.generateTexture("leafdry", 10, 6);
+    g.clear();
+    g.fillStyle(0xbfeaff, 1);
+    g.fillCircle(4, 4, 3.6);
+    g.generateTexture("mote_dew", 8, 8);
+    g.clear();
+    g.fillStyle(0xffe9a8, 1);
+    g.fillCircle(4, 4, 3.6);
+    g.generateTexture("mote_gold", 8, 8);
+    g.clear();
+    g.fillStyle(0xdfe6ff, 1);
+    g.fillCircle(4, 4, 3.6);
+    g.generateTexture("mote_moon", 8, 8);
     g.clear();
     g.fillStyle(0xffffff, 1);
     g.fillEllipse(5, 4, 8, 7);
@@ -1608,8 +1630,8 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
     // One more leaf letting go, now and then. Dust brown, never the gold
     // and pink of the sparkle emitter.
-    const drop = this.add.image(p.x + 8, p.y - 34, "petalbit")
-      .setTint(0x8a7358).setScale(0.8).setAlpha(0).setDepth(base + 0.5);
+    const drop = this.add.image(p.x + 8, p.y - 34, "leafdry")
+      .setScale(0.8).setAlpha(0).setDepth(base + 0.5);
     objs.push(drop);
     this.tweens.add({
       targets: drop,
@@ -1665,11 +1687,13 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     const reach = Math.max(26, hPx * 0.46);
 
     /** One orbiting speck. Depth is re-evaluated every frame as it travels. */
+    // No tint parameter: Phaser.CANVAS cannot tint. Colour comes from the
+    // texture the caller picks.
     const mote = (
-      tex: string, tint: number, scale: number, phase: number,
+      tex: string, scale: number, phase: number,
       rx: number, ry: number, sp: number, blend?: Phaser.BlendModes
     ) => {
-      const o = this.add.image(p.x, cy, tex).setScale(scale).setTint(tint).setDepth(base);
+      const o = this.add.image(p.x, cy, tex).setScale(scale).setDepth(base);
       if (blend !== undefined) o.setBlendMode(blend);
       objs.push(o);
       motes.push({ o, phase, rx, ry, cy, sp });
@@ -1704,8 +1728,8 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         alpha: { from: 0, to: 0.5 }, duration: 1400, yoyo: true,
         repeat: -1, repeatDelay: 1800, ease: "Sine.easeInOut",
       });
-      mote("spark", 0xbfeaff, 0.5, 0, reach, reach * 0.38, 0.55, Phaser.BlendModes.ADD);
-      mote("spark", 0xffffff, 0.36, Math.PI, reach * 0.84, reach * 0.3, 0.55, Phaser.BlendModes.ADD);
+      mote("mote_dew", 0.5, 0, reach, reach * 0.38, 0.55, Phaser.BlendModes.ADD);
+      mote("spark", 0.36, Math.PI, reach * 0.84, reach * 0.3, 0.55, Phaser.BlendModes.ADD);
     }
 
     if (key === "variegated") {
@@ -1731,7 +1755,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
           duration: 2400, delay: k * 800, repeat: -1, ease: "Sine.easeOut",
         });
       }
-      mote("spark", 0xffe9a8, 0.44, 1.1, reach * 0.94, reach * 0.35, 0.4, Phaser.BlendModes.ADD);
+      mote("mote_gold", 0.44, 1.1, reach * 0.94, reach * 0.35, 0.4, Phaser.BlendModes.ADD);
     }
 
     if (key === "moonlit") {
@@ -1753,7 +1777,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         targets: rim, alpha: 0.5, duration: 2100, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
       });
       for (let k = 0; k < 4; k++) {
-        mote("spark", 0xdfe6ff, 0.42 + (k % 2) * 0.12,
+        mote("mote_moon", 0.42 + (k % 2) * 0.12,
           (k / 4) * Math.PI * 2, reach * 1.05, reach * 0.4, 0.42, Phaser.BlendModes.ADD);
       }
     }
@@ -1778,7 +1802,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         duration: 620, repeat: -1, repeatDelay: 2600, ease: "Quad.easeOut",
       });
       for (let k = 0; k < 5; k++) {
-        mote("spark", k % 2 ? 0xffe9a8 : 0xfff3cf, 0.4 + (k % 3) * 0.1,
+        mote(k % 2 ? "mote_gold" : "spark", 0.4 + (k % 3) * 0.1,
           (k / 5) * Math.PI * 2, reach * 1.15, reach * 0.45, 0.5, Phaser.BlendModes.ADD);
       }
     }
@@ -2532,7 +2556,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       repeat: 5,
       onComplete: () => img.setX(x0),
     });
-    this.sparkles.explode(8, x0, PLOTS[i].y - 30);
+    // NO sparkle burst here. The emitter's palette is gold and pink, and it
+    // fires on blooms, stages and pours — an overwatered cactus arriving in
+    // celebration particles is exactly the confusion this whole pass exists
+    // to remove. Nothing positive marks a plant being harmed.
   }
 
   /**

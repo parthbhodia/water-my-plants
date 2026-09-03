@@ -59,6 +59,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [briefKey, setBriefKey] = useState(0);
   const [tutorial, setTutorial] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // which plot the "she is gone" dialog is about, if any
+  const [goneFor, setGoneFor] = useState<number | null>(null);
   // The landscape nudge is a suggestion, not a gate — once somebody has waved
   // it away it must never come back and pester them again.
   const [rotateHint, setRotateHint] = useState(false);
@@ -287,7 +289,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   // The gardener should not wander behind an open modal.
   useEffect(() => {
     bridge.setFrozen(tutorial || seedFor !== null || journalOpen || goneFor !== null);
-  }, [bridge, tutorial, seedFor, journalOpen]);
+    // goneFor belongs here too — without it the effect never re-runs when the
+    // gone modal opens, and the gardener walks about behind it.
+  }, [bridge, tutorial, seedFor, journalOpen, goneFor]);
 
   // ---- scene -> React ----
   useEffect(() => {
@@ -541,8 +545,6 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
 
   // one button, four states: each press moves to the next record, then off
   const [musicOpen, setMusicOpen] = useState(false);
-  // which plot the "she is gone" dialog is about, if any
-  const [goneFor, setGoneFor] = useState<number | null>(null);
 
   const pickMusic = useCallback((mode: MusicMode | "off") => {
     if (mode === "off") {

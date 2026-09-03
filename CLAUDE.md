@@ -147,6 +147,23 @@ reflows the camera. It needs
 every panel with mock state so no login is required. Screenshots land in
 `/tmp/mobile-audit`.
 
+## `setTint()` does nothing — the renderer is CANVAS
+
+Phaser's canvas `batchSprite` reads `blendMode`, `alpha`, then `drawImage`.
+It never reads `tintTopLeft`, and the whole `renderer/canvas/` directory
+contains no reference to tint at all. **Every `setTint` call in this
+codebase is dead code**, including `tint:` arrays on particle emitters.
+
+This is not academic. A "dust brown" leaf built by tinting the white
+`petalbit` fell on dead plants as **white confetti** — the exact
+celebratory-vocabulary mistake the loss states exist to avoid. Anything
+that needs a colour needs its own painted texture: `leafdry`, `mote_dew`,
+`mote_gold`, `mote_moon` were all added for this reason.
+
+Before adding a coloured effect, paint the texture. If a change looks
+right in a screenshot only because the base texture was already that
+colour (`sunglow`, `moonglow`, `ray`), the tint on it is still a no-op.
+
 ## Watering
 
 Three ways in, because hunting for a button is not a ritual:
