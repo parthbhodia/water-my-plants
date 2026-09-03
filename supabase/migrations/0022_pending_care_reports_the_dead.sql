@@ -1,0 +1,17 @@
+-- ============================================================
+-- A garden where every plant was dead reported "Everything is tended."
+--
+-- Every branch of pending_care filtered `died_on is null`, so a dead plant
+-- matched no branch and the function returned null. The app read that as
+-- nothing-to-do and told the player to go put a record on — while four
+-- corpses sat in the beds and the trophy score read -60 with no explanation.
+--
+-- Death is the single most important thing the brief can report, so it now
+-- comes first, ahead of dying. It is also actionable: a revival tonic brings
+-- the plant back, and clearing the bed frees it for a new seed. The returned
+-- object carries 'plot' so the UI can send the player straight there.
+--
+-- pending_care is re-created whole; the dying / window / thirsty / harvest
+-- branches are unchanged. Applied remotely as `pending_care_reports_the_dead`.
+-- Guarded permanently by supabase/tests/rpc_smoke.sql.
+-- ============================================================

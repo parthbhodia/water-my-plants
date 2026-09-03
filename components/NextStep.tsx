@@ -1,6 +1,6 @@
 "use client";
 
-import { Sprout, Droplets, Flower2, CircleAlert, Sparkles } from "lucide-react";
+import { Sprout, Droplets, Flower2, CircleAlert, Sparkles, Skull } from "lucide-react";
 import type { GardenState } from "@/lib/types";
 import { SPECIES_BY_KEY, windowOpen } from "@/lib/species";
 
@@ -18,6 +18,11 @@ export default function NextStep({
 }) {
   const plots = state.plots.filter((p) => p.unlocked);
 
+  // Death comes first. A dead plant matched none of the branches below —
+  // it is not dying, not thirsty, not bloomed, and the plot is not empty
+  // because a corpse still occupies it — so a garden full of dead plants
+  // fell through to "Everything is tended".
+  const dead = plots.find((p) => p.plant?.dead);
   const dying = plots.find(
     (p) => p.plant && !p.plant.dead && !p.plant.isBloomed && p.plant.overdueDays >= 3
   );
@@ -33,7 +38,16 @@ export default function NextStep({
 
   let step: { icon: typeof Sprout; kind: string; title: string; body: string; cta: string; idx: number; plant: boolean } | null = null;
 
-  if (dying) {
+  if (dead) {
+    const sp = SPECIES_BY_KEY[dead.plant!.species];
+    const tonics = state.inventory?.tonic ?? 0;
+    step = { icon: Skull, kind: "dead", idx: dead.idx, plant: false,
+      title: `Your ${sp?.name ?? "plant"} didn't make it`,
+      body: tonics > 0
+        ? `Plot ${dead.idx + 1} — you have a revival tonic. Use it, or clear the bed and start again.`
+        : `Plot ${dead.idx + 1} — a revival tonic from the Shop brings her back, or clear the bed and plant something new.`,
+      cta: "Go see" };
+  } else if (dying) {
     const sp = SPECIES_BY_KEY[dying.plant!.species];
     step = { icon: CircleAlert, kind: "dying", idx: dying.idx, plant: false,
       title: `Water the ${sp?.name} — today or never`,

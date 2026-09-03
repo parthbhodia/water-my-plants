@@ -151,6 +151,22 @@ begin
   exception when others then
     v_out := v_out || 'finish_tutorial=**FAIL:'||SQLERRM||'** '; procedure_failed := true; end;
 
+  -- A garden of dead plants must never report "nothing to do". Every branch
+  -- of pending_care once filtered `died_on is null`, so a wiped-out garden
+  -- fell through to null and the app said "Everything is tended."
+  begin
+    update plants set died_on = current_date
+     where user_id = v_uid and active and died_on is null and not is_bloomed;
+    if (public.pending_care(v_uid))->>'kind' is distinct from 'dead' then
+      v_out := v_out || 'dead_is_reported=**FAIL:dead garden reports '
+            || coalesce((public.pending_care(v_uid))->>'kind','nothing') || '** ';
+      procedure_failed := true;
+    else
+      v_out := v_out || 'dead_is_reported=ok ';
+    end if;
+  exception when others then
+    v_out := v_out || 'dead_is_reported=**FAIL:'||SQLERRM||'** '; procedure_failed := true; end;
+
   -- guarded-by-design: these SHOULD refuse, and refusing is a pass
   begin perform public.add_friend('LILY-0000');
     v_out := v_out || 'add_friend=**FAIL:accepted a bogus code** '; procedure_failed := true;

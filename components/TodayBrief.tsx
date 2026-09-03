@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, BellRing, Check, Droplets, Flower2, Hourglass, Leaf, CircleAlert } from "lucide-react";
+import { Bell, BellRing, Check, Droplets, Flower2, Hourglass, Leaf, CircleAlert, Skull } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import type { TodayBrief as Brief } from "@/lib/types";
 
 const ICON: Record<string, typeof Leaf> = {
+  dead: Skull,
   dying: CircleAlert,
   window: Hourglass,
   thirsty: Droplets,
