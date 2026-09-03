@@ -23,8 +23,19 @@ export function welcomeMessage(s: GardenState): string {
 
   if (planted === 0)
     return `Empty plots, endless promise${name ? `, ${name}` : ""}. Tap a plot to plant your first seed! 🌱`;
-  if (dead > 0)
-    return `${dead === 1 ? "One plant didn't make it" : `${dead} plants didn't make it`} while you were away, ${dear}. Clear the plot and start again. 🥀`;
+  if (dead > 0) {
+    // Survivors first. This used to open with the loss and then push the one
+    // irreversible action in the game — "Clear the plot and start again" —
+    // as the first sentence a returning player read, while pending_care,
+    // NextStep and PlantCard all led with recovery. It also never mentioned
+    // the plants that lived, which is the part their care actually earned.
+    const held = planted - dead;
+    if (held > 0)
+      return `${held} of your ${planted} held on while you were away${name ? `, ${name}` : ""} — that is your doing. ${
+        dead === 1 ? "One didn't" : `${dead} didn't`
+      }. There's a tonic for that, or you can make the bed ready again when you're ready.`;
+    return `A hard week for the garden${name ? `, ${name}` : ""}. A tonic can bring one back, or you can start a bed over whenever you like — no hurry.`;
+  }
   if (thirsty > 0)
     return `${name ? `${name}, ` : ""}${thirsty} ${thirsty === 1 ? "plant needs" : "plants need"} you today. Let's get watering! 💧`;
   if (bloomed > 0)
@@ -89,7 +100,7 @@ export function welcomeMood(s: GardenState): GuideMood {
   const dead = s.plots.some((p) => p.plant?.dead);
   const thirsty = s.plots.some((p) => p.plant?.thirsty && !p.plant?.isBloomed && !p.plant?.dead);
   const bloomed = s.plots.some((p) => p.plant?.isBloomed);
-  if (dead) return "worry";
+  if (dead) return "mourn";
   if (bloomed) return "proud";
   if (thirsty) return "happy";
   return s.hour >= 21 || s.hour < 5 ? "sleepy" : "happy";

@@ -7,7 +7,14 @@
 
 import { type Ctx, lg, ell, rr } from "./draw";
 
-export type GuideMood = "happy" | "cheer" | "worry" | "proud" | "sleepy";
+/**
+ * `mourn` exists because `worry` was standing in for it, and worry is the
+ * wrong face. Worry RAISES the brows — anxiety, "what do we do" — and it was
+ * the face Granny wore when a player came back to a dead garden, which is the
+ * one moment they need absolution rather than alarm. Mourning keeps the brows
+ * level and lowers the gaze.
+ */
+export type GuideMood = "happy" | "cheer" | "worry" | "proud" | "sleepy" | "mourn";
 
 export const GUIDE_NAME = "Granny Fern";
 
@@ -102,8 +109,8 @@ export function paintGuide(c: Ctx, mood: GuideMood = "happy") {
   }
 
   // ---- face by mood ----
-  const browY = mood === "worry" ? 58 : 60;
-  const browTilt = mood === "worry" ? 3 : mood === "cheer" ? -1.5 : 0;
+  const browY = mood === "worry" ? 58 : mood === "mourn" ? 61 : 60;
+  const browTilt = mood === "worry" ? 3 : mood === "cheer" ? -1.5 : mood === "mourn" ? 1.5 : 0;
   c.strokeStyle = "#a9a79c";
   c.lineWidth = 2.6;
   c.lineCap = "round";
@@ -133,6 +140,14 @@ export function paintGuide(c: Ctx, mood: GuideMood = "happy") {
     c.lineWidth = 2.4;
     c.beginPath(); c.moveTo(CX - 15, 69); c.quadraticCurveTo(CX - 11, 71.5, CX - 7, 69); c.stroke();
     c.beginPath(); c.moveTo(CX + 7, 69); c.quadraticCurveTo(CX + 11, 71.5, CX + 15, 69); c.stroke();
+  } else if (mood === "mourn") {
+    // looking down at the bed, not up at the player
+    ell(c, CX - 11, 71, 2.5, 2.6); c.fill();
+    ell(c, CX + 11, 71, 2.5, 2.6); c.fill();
+    c.strokeStyle = "#4a3a2c";
+    c.lineWidth = 1.8;
+    c.beginPath(); c.moveTo(CX - 15.5, 67.5); c.quadraticCurveTo(CX - 11, 66, CX - 6.5, 67.5); c.stroke();
+    c.beginPath(); c.moveTo(CX + 6.5, 67.5); c.quadraticCurveTo(CX + 11, 66, CX + 15.5, 67.5); c.stroke();
   } else {
     ell(c, CX - 11, 69, 2.6, 3); c.fill();
     ell(c, CX + 11, 69, 2.6, 3); c.fill();
@@ -159,6 +174,10 @@ export function paintGuide(c: Ctx, mood: GuideMood = "happy") {
   } else if (mood === "sleepy") {
     ell(c, CX, 85.5, 2.6, 3.2);
     c.stroke();
+  } else if (mood === "mourn") {
+    // level and closed. A frown would make it her grief instead of theirs.
+    c.lineWidth = 2.2;
+    c.beginPath(); c.moveTo(CX - 5.5, 84.6); c.quadraticCurveTo(CX, 85.4, CX + 5.5, 84.6); c.stroke();
   } else {
     // happy / proud: warm closed smile
     c.beginPath(); c.moveTo(CX - 6.5, 83); c.quadraticCurveTo(CX, 88.5, CX + 6.5, 83); c.stroke();
