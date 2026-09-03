@@ -1,0 +1,13 @@
+-- ============================================================
+-- pending_care's dying branch was `overdue_days between 2 and 3`, so a plant
+-- MORE overdue than three fell straight past it into the mild "thirsty"
+-- message. With reaping previously lazy, plants sat far beyond that window:
+-- an eleven-day-dry garden was being told it needed ten seconds of
+-- attention.
+--
+-- Now `>= 2`. With reaping hourly and server-wide, anything >= 4 is already
+-- dead and caught by the branch above, so the upper bound bought nothing and
+-- cost the truth. Every other branch is unchanged.
+--
+-- Applied remotely as `pending_care_dying_window`.
+-- ============================================================
