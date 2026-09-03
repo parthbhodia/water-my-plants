@@ -2516,3 +2516,62 @@ button { font-family: var(--font); cursor: pointer; }
   .plant-card-live.gone { animation: none; }
   .pcl-fallen { transform: rotate(7deg); }
 }
+
+/* ---------- "She is gone" ----------
+   A tap on a dead plant used to do nothing visible at all. This stops the
+   world, says what happened, and puts both ways forward in reach — with
+   leaving always available and never framed as failure. */
+.gone-modal {
+  position: relative;
+  background: linear-gradient(180deg, #fffdf7, #f8f3e9);
+  border-radius: calc(var(--radius) + 6px);
+  border: 1px solid rgba(255,255,255,.9);
+  box-shadow: inset 0 1px 0 #fff, var(--shadow-lg);
+  width: min(420px, 100%); max-height: 88dvh; overflow-y: auto;
+  animation: toast-in .34s cubic-bezier(.34,1.56,.64,1);
+}
+.gm-close {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  display: grid; place-items: center; width: 44px; height: 44px;
+  background: none; border: 0; cursor: pointer; color: #8a7a66; border-radius: 12px;
+}
+.gm-band {
+  display: grid; place-items: center; padding: 30px 0 22px;
+  border-radius: calc(var(--radius) + 6px) calc(var(--radius) + 6px) 0 0;
+  background:
+    radial-gradient(120% 90% at 50% 120%, rgba(140,120,95,.24), transparent 70%),
+    linear-gradient(180deg, #ebe7e0, #ddd7ce);
+  border-bottom: 1px solid rgba(150,135,112,.3);
+}
+.gm-fallen {
+  display: block; filter: grayscale(1); opacity: .6;
+  transform: rotate(8deg) translateY(4px); transform-origin: 50% 100%;
+}
+.gm-band::after {
+  content: ""; display: block; width: 148px; height: 11px; margin-top: -5px;
+  border-radius: 50%; background: rgba(120,104,82,.3); filter: blur(3px);
+}
+.gm-body { padding: 18px 18px calc(16px + env(safe-area-inset-bottom)); }
+.gm-body h2 { margin: 0; font-size: 1.5rem; letter-spacing: -.01em; }
+.gm-gone { margin: 4px 0 0; font-size: 1.02rem; font-weight: 600; color: #7d3520; }
+.gm-granny {
+  display: flex; gap: 11px; align-items: flex-start;
+  margin: 15px 0 0; padding: 12px; border-radius: 14px; background: #f3f7f1;
+}
+.gm-granny p { margin: 0; font-size: .89rem; line-height: 1.5; color: var(--ink-soft, #6b7a6e); }
+/* Stacked, not side by side: at phone width "Find a tonic" and "Clear the
+   plot" both wrapped onto two lines, which reads as careless on the one
+   screen asking the player to make a decision. */
+.gm-actions { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; }
+.gm-actions .btn {
+  width: 100%; justify-content: center; min-height: 48px; white-space: nowrap;
+}
+.gm-later {
+  display: block; width: 100%; min-height: 44px; margin-top: 6px;
+  background: none; border: 0; cursor: pointer; font: inherit;
+  font-size: .86rem; color: var(--ink-soft, #6b7a6e);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gone-modal { animation: none; }
+  .gm-fallen { transform: rotate(8deg); }
+}

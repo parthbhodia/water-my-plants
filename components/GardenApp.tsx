@@ -27,6 +27,7 @@ import DecorBar from "./DecorBar";
 import RestorePanel from "./RestorePanel";
 import NextStep from "./NextStep";
 import MusicPicker from "./MusicPicker";
+import GonePlantModal from "./GonePlantModal";
 import LevelBar from "./LevelBar";
 import ReminderSettings from "./ReminderSettings";
 import PlantCard from "./PlantCard";
@@ -285,16 +286,24 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
 
   // The gardener should not wander behind an open modal.
   useEffect(() => {
-    bridge.setFrozen(tutorial || seedFor !== null || journalOpen);
+    bridge.setFrozen(tutorial || seedFor !== null || journalOpen || goneFor !== null);
   }, [bridge, tutorial, seedFor, journalOpen]);
 
   // ---- scene -> React ----
   useEffect(() => {
     bridge.onPlotTapped = (i) => {
       setSelected(i);
+      const p = stateRef.current?.plots[i];
+      // A dead plant answered a tap with silence, and on a wide screen the
+      // card explaining it is below the fold — so the most confusing moment
+      // in the game was the one with no response at all.
+      if (p?.plant?.dead) {
+        sfx.click();
+        setGoneFor(i);
+        return;
+      }
       // Tapping a plant that can drink right now waters it. Anything else
       // just selects — a tap must never damage an overwaterable plant.
-      const p = stateRef.current?.plots[i];
       if (p && canWaterNow(p.plant, stateRef.current!.hour) && !acting.current) {
         bridge.tend(i, "water");
       }
@@ -532,6 +541,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
 
   // one button, four states: each press moves to the next record, then off
   const [musicOpen, setMusicOpen] = useState(false);
+  // which plot the "she is gone" dialog is about, if any
+  const [goneFor, setGoneFor] = useState<number | null>(null);
 
   const pickMusic = useCallback((mode: MusicMode | "off") => {
     if (mode === "off") {
@@ -648,6 +659,16 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             onWaterAll={waterAll}
           />
         )}
+
+        {state && <GonePlantModal
+          state={state}
+          plotIdx={goneFor}
+          busy={busy}
+          onRevive={revivePlot}
+          onClear={clearPlot}
+          onShop={() => setTab("shop")}
+          onClose={() => setGoneFor(null)}
+        />}
 
         <MusicPicker
           open={musicOpen}
