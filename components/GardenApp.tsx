@@ -613,7 +613,15 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
                     if (plant) setSeedFor(state.plots[idx]);
                   }}
                 />
-                <PlantCard state={state} selected={selected} />
+                <PlantCard
+                  state={state}
+                  selected={selected}
+                  busy={busy}
+                  onTend={tend}
+                  onPlant={(p) => { sfx.click(); setSeedFor(p); }}
+                  onClear={clearPlot}
+                  onRevive={revivePlot}
+                />
                 <PlotBar
                   state={state}
                   selected={selected}

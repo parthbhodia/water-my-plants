@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import {
-  Droplets, Clock, Sun, Cloud, Waves, Sprout, Leaf, TriangleAlert, Sparkles, ChevronDown,
+  Droplets, Clock, Sun, Cloud, Waves, Sprout, Leaf, TriangleAlert, Sparkles,
+  ChevronDown, Skull, Flower2, FlaskConical, Nut, Scissors,
 } from "lucide-react";
-import { SPECIES_BY_KEY, windowOpen } from "@/lib/species";
+import { SPECIES_BY_KEY, windowOpen, canWaterNow } from "@/lib/species";
 import { PLANT_FACTS } from "@/lib/plantfacts";
 import { VARIANT_BY_KEY } from "@/lib/variants";
-import type { GardenState, PlantState } from "@/lib/types";
+import type { GardenState, PlotState, PlantState } from "@/lib/types";
 import PlantIcon from "./PlantIcon";
 
 const PLOT_WORD = {
@@ -17,31 +18,72 @@ const PLOT_WORD = {
   any: { icon: Leaf, label: "anywhere" },
 } as const;
 
-/** Whole days between two ISO dates. */
+const PLOT_LABEL = {
+  sun: "A sunny plot", shade: "A shaded plot", water: "The pond",
+} as const;
+
 function daysBetween(a: string, b: string) {
-  const ms = Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z");
-  return Math.round(ms / 86400000);
+  return Math.round(
+    (Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000
+  );
 }
 
 /**
- * Everything about the plant you just tapped, in Granny's voice: what it is,
- * how far along, what it has actually asked for, and — before you can do any
- * harm — whether watering it right now would hurt it.
+ * The one card about the plot you have selected — identity, its state right
+ * now, and the actions available on it.
  *
- * The warning is the point. A cactus tap must never quietly rot the roots, so
- * the reason arrives *before* the action, not as a toast afterwards.
+ * It shows what is TRUE of the plant today, not everything known about it.
+ * It used to render the full care contract plus a botany essay regardless of
+ * state, so a dead fern was handed "Drinks every 2 days · Blooms 0 days to
+ * go" and a lesson on keeping ferns alive — advice for a plant that had
+ * already died, filling the screen above the two buttons that actually
+ * mattered. Reference material now lives behind a disclosure.
  */
 export default function PlantCard({
   state,
   selected,
+  busy,
+  onTend,
+  onPlant,
+  onClear,
+  onRevive,
 }: {
   state: GardenState;
   selected: number;
+  busy: boolean;
+  onTend: (i: number, action: "water" | "feed" | "prune") => void;
+  onPlant: (p: PlotState) => void;
+  onClear: (i: number) => void;
+  onRevive: (i: number) => void;
 }) {
-  const [openFact, setOpenFact] = useState(false);
+  const [openDetail, setOpenDetail] = useState(false);
   const plot = state.plots[selected];
-  const plant: PlantState | null = plot?.plant ?? null;
-  if (!plant) return null;
+  if (!plot || !plot.unlocked) return null;
+
+  const plant: PlantState | null = plot.plant ?? null;
+
+  // ---- an empty bed: one line, one button ----
+  if (!plant) {
+    return (
+      <section className="plant-card-live empty" aria-label="Empty plot">
+        <header className="pcl-head">
+          <span className="pcl-art dim" aria-hidden>
+            <Sprout size={30} strokeWidth={2} />
+          </span>
+          <div className="pcl-id">
+            <b>{PLOT_LABEL[plot.kind]}</b>
+            <span className="pcl-sub">Plot {selected + 1} — empty and ready for a seed.</span>
+          </div>
+        </header>
+        <div className="plot-buttons">
+          <button className="btn small" disabled={busy} onClick={() => onPlant(plot)}>
+            <Sprout size={15} strokeWidth={2.4} aria-hidden /> Plant here
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   const sp = SPECIES_BY_KEY[plant.species];
   if (!sp) return null;
 
@@ -49,25 +91,83 @@ export default function PlantCard({
   const vdef = plant.variant ? VARIANT_BY_KEY[plant.variant] : undefined;
   const Plot = PLOT_WORD[sp.needsPlot];
   const inWindow = windowOpen(sp, state.hour);
+  const canWater = canWaterNow(plant, state.hour);
+  const tonics = state.inventory?.tonic ?? 0;
 
-  // days until the next drink is genuinely due
   const since = plant.lastCareOn ? daysBetween(plant.lastCareOn, state.today) : null;
   const dueIn = since === null ? 0 : Math.max(0, sp.cadenceDays - since);
 
-  // the one case where a tap could do damage
   const wouldHarm = sp.overwaterable && !plant.thirsty && !plant.dead && !plant.isBloomed;
   const outOfWindow = plant.thirsty && !inWindow && !plant.dead && !plant.isBloomed;
 
+  // ---- dead: nothing about care is true any more ----
+  if (plant.dead) {
+    const goneFor = plant.lastCareOn ? daysBetween(plant.lastCareOn, state.today) : null;
+    return (
+      <section className="plant-card-live gone" aria-label={`${sp.name} died`}>
+        <header className="pcl-head">
+          <span className="pcl-art gone" aria-hidden>
+            <PlantIcon species={sp.key} stage={plant.stage} size={54} dead />
+          </span>
+          <div className="pcl-id">
+            <b>
+              {sp.name}
+              <span className="pcl-tag dead"><Skull size={12} strokeWidth={2.8} aria-hidden /> Gone</span>
+            </b>
+            <span className="pcl-sub">
+              Plot {selected + 1} —{" "}
+              {goneFor !== null
+                ? `she went ${goneFor} days without water.`
+                : "she did not make it."}
+            </span>
+          </div>
+        </header>
+
+        <div className="plot-buttons">
+          {tonics > 0 ? (
+            <button className="btn small" disabled={busy} onClick={() => onRevive(selected)}>
+              <FlaskConical size={15} strokeWidth={2.4} aria-hidden /> Revive ({tonics})
+            </button>
+          ) : (
+            <span className="pcl-note">
+              A revival tonic from the Shop would bring her back.
+            </span>
+          )}
+          <button className="btn pink small" disabled={busy} onClick={() => onClear(selected)}>
+            <Flower2 size={15} strokeWidth={2.4} aria-hidden /> Clear the plot
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  // ---- alive: one status line, the actions, details on request ----
+  const statusLine = plant.isBloomed
+    ? "In full bloom — harvest to free the plot."
+    : plant.overdueDays >= 3
+    ? "Last chance — she dies tonight."
+    : plant.wilted
+    ? `Wilting, ${plant.overdueDays} day${plant.overdueDays === 1 ? "" : "s"} late.`
+    : plant.thirsty
+    ? inWindow ? "Thirsty right now." : "Thirsty, but not during these hours."
+    : dueIn > 0
+    ? `Watered. Next drink in ${dueIn} day${dueIn === 1 ? "" : "s"}.`
+    : "Watered for today.";
+
+  const tone = plant.isBloomed ? "bloom"
+    : plant.overdueDays >= 3 ? "urgent"
+    : plant.thirsty ? "thirsty" : "calm";
+
   return (
-    <section className="plant-card-live" aria-label={`${sp.name} details`}>
+    <section className={`plant-card-live t-${tone}`} aria-label={`${sp.name} details`}>
       <header className="pcl-head">
         <span className="pcl-art" aria-hidden>
-          <PlantIcon species={sp.key} stage={plant.stage} size={62} />
+          <PlantIcon species={sp.key} stage={plant.stage} size={54} wilted={plant.wilted} />
         </span>
         <div className="pcl-id">
           <b>
             {sp.name}
-            {vdef && <span className="pcl-variant" style={{ background: vdef.tint }}>{vdef.name}</span>}
+            {vdef && <span className="pcl-tag" style={{ background: vdef.tint }}>{vdef.name}</span>}
           </b>
           <span className="pcl-sub">
             Plot {selected + 1} · day {plant.dayNumber} · stage {plant.stage} of 7
@@ -79,6 +179,8 @@ export default function PlantCard({
           </span>
         </div>
       </header>
+
+      <p className={`pcl-status s-${tone}`}>{statusLine}</p>
 
       {wouldHarm && (
         <p className="pcl-warn" role="status">
@@ -94,50 +196,77 @@ export default function PlantCard({
         <p className="pcl-warn soft" role="status">
           <Clock size={16} strokeWidth={2.5} aria-hidden />
           <span>
-            <b>Thirsty, but not now.</b> {sp.name} drinks{" "}
+            <b>Not during these hours.</b>{" "}
             {sp.windowStart !== null && sp.windowEnd !== null
-              ? `between ${sp.windowStart}:00 and ${sp.windowEnd}:00`
-              : "on its own schedule"}
-            . Water outside that runs straight off.
+              ? `She drinks between ${sp.windowStart}:00 and ${sp.windowEnd}:00.`
+              : "She keeps her own schedule."}
           </span>
         </p>
       )}
 
-      <dl className="pcl-rules">
-        <div>
-          <dt><Droplets size={14} strokeWidth={2.5} aria-hidden /> Drinks</dt>
-          <dd>{sp.cadenceDays === 1 ? "every day" : `every ${sp.cadenceDays} days`}</dd>
-        </div>
-        <div>
-          <dt><Plot.icon size={14} strokeWidth={2.5} aria-hidden /> Wants</dt>
-          <dd>{Plot.label}</dd>
-        </div>
-        <div>
-          <dt><Sprout size={14} strokeWidth={2.5} aria-hidden /> Blooms</dt>
-          <dd>{Math.max(0, sp.maturesDays - plant.dayNumber)} days to go</dd>
-        </div>
-        {sp.feedsRequired > 0 && (
-          <div>
-            <dt><Leaf size={14} strokeWidth={2.5} aria-hidden /> Feeds</dt>
-            <dd>{plant.feedsDone} of {sp.feedsRequired} done</dd>
-          </div>
-        )}
-      </dl>
-
-      {fact && (
-        <>
-          <p className="pcl-why">{fact.why}</p>
+      <div className="plot-buttons">
+        {!plant.isBloomed && (
           <button
-            className="pcl-more"
-            onClick={() => setOpenFact((o) => !o)}
-            aria-expanded={openFact}
+            className={`btn blue small ${canWater ? "" : "dim"}`}
+            disabled={busy}
+            onClick={() => onTend(selected, "water")}
           >
-            <Sparkles size={14} strokeWidth={2.5} aria-hidden />
-            {openFact ? "That's lovely" : "Tell me something about her"}
-            <ChevronDown size={14} strokeWidth={2.6} className={openFact ? "flip" : ""} aria-hidden />
+            <Droplets size={15} strokeWidth={2.4} aria-hidden /> Water
           </button>
-          {openFact && <p className="pcl-fact">{fact.didYouKnow}</p>}
-        </>
+        )}
+        {!plant.isBloomed && sp.feedsRequired > plant.feedsDone && (
+          <button className="btn small" disabled={busy} onClick={() => onTend(selected, "feed")}>
+            <Nut size={15} strokeWidth={2.4} aria-hidden /> Feed ({plant.feedsDone}/{sp.feedsRequired})
+          </button>
+        )}
+        {!plant.isBloomed && sp.prunesRequired > plant.prunesDone && (
+          <button className="btn small" disabled={busy} onClick={() => onTend(selected, "prune")}>
+            <Scissors size={15} strokeWidth={2.4} aria-hidden /> Prune
+          </button>
+        )}
+        {plant.isBloomed && (
+          <button className="btn pink small" disabled={busy} onClick={() => onClear(selected)}>
+            <Flower2 size={15} strokeWidth={2.4} aria-hidden /> Harvest
+          </button>
+        )}
+      </div>
+
+      <button
+        className="pcl-more"
+        onClick={() => setOpenDetail((o) => !o)}
+        aria-expanded={openDetail}
+      >
+        <Sparkles size={14} strokeWidth={2.5} aria-hidden />
+        About the {sp.name}
+        <ChevronDown size={14} strokeWidth={2.6} className={openDetail ? "flip" : ""} aria-hidden />
+      </button>
+
+      {openDetail && (
+        <div className="pcl-detail">
+          <dl className="pcl-rules">
+            <div>
+              <dt><Droplets size={14} strokeWidth={2.5} aria-hidden /> Drinks</dt>
+              <dd>{sp.cadenceDays === 1 ? "every day" : `every ${sp.cadenceDays} days`}</dd>
+            </div>
+            <div>
+              <dt><Plot.icon size={14} strokeWidth={2.5} aria-hidden /> Wants</dt>
+              <dd>{Plot.label}</dd>
+            </div>
+            <div>
+              <dt><Sprout size={14} strokeWidth={2.5} aria-hidden /> Blooms</dt>
+              <dd>
+                {Math.max(0, sp.maturesDays - plant.dayNumber) || "any day now"}
+                {sp.maturesDays - plant.dayNumber > 0 ? " days to go" : ""}
+              </dd>
+            </div>
+          </dl>
+          {fact && (
+            <>
+              <p className="pcl-why">{fact.why}</p>
+              <p className="pcl-fact">{fact.didYouKnow}</p>
+            </>
+          )}
+        </div>
       )}
     </section>
   );

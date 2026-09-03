@@ -2352,3 +2352,79 @@ button { font-family: var(--font); cursor: pointer; }
   border-radius: 999px; background: #fdece7; color: #a33e22;
   font-weight: 700; font-size: 0.76rem;
 }
+
+/* ================= Selected-plot card, rebuilt =================
+   One card about the plot you picked: who it is, what is true today, and
+   the buttons for it. It used to print the whole care contract plus a
+   botany essay whatever the plant's state — a dead fern was handed
+   "Blooms 0 days to go" and a lesson on keeping ferns alive. Reference
+   material now sits behind a disclosure; state leads. */
+
+.plant-card-live .pcl-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .66rem; font-weight: 800; letter-spacing: .03em;
+  text-transform: uppercase; color: #3a2c05;
+  padding: 2px 7px; border-radius: 999px;
+}
+.pcl-tag.dead { background: #e9dcd7; color: #7d3520; }
+
+.pcl-art.dim, .pcl-art.gone { filter: grayscale(1); opacity: .6; }
+.pcl-art.dim { display: grid; place-items: center; color: var(--muted, #6b7a6e); }
+
+/* the single line that says what is true right now */
+.pcl-status {
+  margin: 11px 0 0; padding: 9px 12px;
+  border-radius: 11px; font-size: .9rem; font-weight: 600;
+}
+.pcl-status.s-calm   { background: #f0f6ef; color: #2f5c3a; }
+.pcl-status.s-thirsty{ background: #e6f3fb; color: #1f5a78; }
+.pcl-status.s-urgent { background: #fdece7; color: #7d3520; }
+.pcl-status.s-bloom  { background: #fdeef5; color: #8d2b53; }
+
+/* action row keeps the .plot-buttons name the audit and coach marks use */
+.plant-card-live .plot-buttons {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;
+}
+.pcl-note {
+  flex: 1 1 190px; align-self: center;
+  font-size: .82rem; line-height: 1.45; color: var(--muted, #6b7a6e);
+}
+
+.plant-card-live.gone { border-color: rgba(190, 80, 50, .3); background: #fffaf8; }
+.plant-card-live.empty { border-style: dashed; }
+
+.pcl-detail {
+  margin-top: 4px; padding-top: 10px;
+  border-top: 1px solid rgba(62, 142, 82, .16);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.pcl-detail .pcl-rules { margin: 0; }
+.pcl-detail .pcl-why, .pcl-detail .pcl-fact { margin: 0; }
+
+/* ---------- plot chips: state must read at a glance ----------
+   Every state already had a class and a badge icon, but they all painted
+   the same grey, so four dead plants looked exactly like four healthy
+   ones. A colour band per state does the work the icon alone could not. */
+.plot-chip { position: relative; overflow: hidden; }
+.plot-chip::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
+  background: #cfdac9;
+}
+.plot-chip.s-dead::before    { background: #b8563a; }
+.plot-chip.s-dying::before   { background: #e08a3c; }
+.plot-chip.s-thirsty::before { background: #3f9bc4; }
+.plot-chip.s-bloom::before   { background: #d9569a; }
+.plot-chip.s-ok::before      { background: #62b874; }
+.plot-chip.s-empty::before   { background: #d8e2d5; }
+
+.plot-chip.s-dead    { background: #f7ecea; }
+.plot-chip.s-dead .chip-art { filter: grayscale(1); opacity: .55; }
+.plot-chip.s-dead .chip-name { color: #8a4632; }
+.plot-chip.s-dying   { background: #fdf3e6; }
+.plot-chip.s-thirsty { background: #eaf5fb; }
+.plot-chip.s-bloom   { background: #fdeef5; }
+
+/* The disclosure is a real control on a phone: 44px, per the touch rule. */
+.plant-card-live .pcl-more {
+  min-height: 44px; padding: 12px 6px; align-self: flex-start;
+}

@@ -10,6 +10,7 @@ import { canWaterNow } from "@/lib/species";
 import Hud from "@/components/Hud";
 import TabBar, { type PanelTab } from "@/components/TabBar";
 import PlotBar from "@/components/PlotBar";
+import PlantCard from "@/components/PlantCard";
 import RestorePanel from "@/components/RestorePanel";
 import NextStep from "@/components/NextStep";
 import WaterFab from "@/components/WaterFab";
@@ -109,6 +110,9 @@ export default function DevMobile() {
                 <NextStep state={STATE} onGo={(_i, plant) => plant && setModal("seed")} />
                 <PlotBar state={STATE} selected={sel} busy={false}
                   onSelect={(i)=>setSel(i)} onTend={(i,a)=>bridge.tend(i,a)} onPlant={()=>setModal("seed")} onClear={()=>{}} onRevive={()=>{}} />
+                {/* the tend buttons now live on the card, not the chip row */}
+                <PlantCard state={STATE} selected={sel} busy={false}
+                  onTend={(i,a)=>bridge.tend(i,a)} onPlant={()=>setModal("seed")} onClear={()=>{}} onRevive={()=>{}} />
                 <RestorePanel state={STATE} onState={()=>{}} showToast={()=>{}} />
               </>
             )}
