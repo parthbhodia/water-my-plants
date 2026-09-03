@@ -28,6 +28,7 @@ import RestorePanel from "./RestorePanel";
 import NextStep from "./NextStep";
 import MusicPicker from "./MusicPicker";
 import LevelBar from "./LevelBar";
+import ReminderSettings from "./ReminderSettings";
 import PlantCard from "./PlantCard";
 import WaterFab from "./WaterFab";
 import WeeklyGift from "./WeeklyGift";
@@ -78,10 +79,56 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const acting = useRef(false);
   const actingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = useCallback((msg: string, ms = 5600, mood: GuideMood = "happy") => {
+  /*
+   * Granny speaks one line at a time, and she can be waved away.
+   *
+   * This used to hold a single {text, mood} and a single timer, so a second
+   * call within the display window destroyed the first. The level-up line
+   * fired from applyState was killed by the tend message milliseconds later
+   * every single time — and since watering is the only way a level is ever
+   * crossed, that copy was unreachable in production and celebrateLevel's
+   * gold badge appeared with nothing said over it.
+   *
+   * Now: a shallow queue, so a second message waits its turn instead of
+   * erasing the first, and `jump` for the rare line that must not wait. The
+   * queue stays two deep on purpose — a backlog of stale narration is worse
+   * than dropping some of it.
+   */
+  const toastQueue = useRef<Array<{ text: string; mood: GuideMood; ms: number }>>([]);
+  const toastShowing = useRef(false);
+  const runNextToast = useRef<() => void>(() => {});
+
+  runNextToast.current = () => {
+    const next = toastQueue.current.shift();
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ text: msg, mood });
-    toastTimer.current = setTimeout(() => setToast(null), ms);
+    if (!next) {
+      toastShowing.current = false;
+      setToast(null);
+      return;
+    }
+    toastShowing.current = true;
+    setToast({ text: next.text, mood: next.mood });
+    toastTimer.current = setTimeout(() => runNextToast.current(), next.ms);
+  };
+
+  /** Waved away by the cross, or by touching anything else. */
+  const dismissToast = useCallback(() => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = null;
+    toastShowing.current = false;
+    setToast(null);
+    // a beat between lines, so a queued one reads as a new remark
+    if (toastQueue.current.length) {
+      window.setTimeout(() => runNextToast.current(), 320);
+    }
+  }, []);
+
+  const showToast = useCallback((msg: string, ms = 5600, mood: GuideMood = "happy", jump = false) => {
+    const item = { text: msg, mood, ms };
+    if (jump) toastQueue.current.unshift(item);
+    else toastQueue.current.push(item);
+    if (toastQueue.current.length > 2) toastQueue.current.length = 2;
+    if (!toastShowing.current) runNextToast.current();
   }, []);
 
   /**
@@ -103,9 +150,11 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       if (prev !== null && s.level > prev) {
         sfx.levelUp();
         bridge.celebrateLevel(s.level);
+        // jumps the queue: it is the rarest line in the game and it was the
+        // one being destroyed by the tend message that always follows it
         showToast(
           `Level ${s.level}, ${s.displayName?.split(" ")[0] ?? "love"}. All that quiet tending adds up.`,
-          7000, "proud"
+          7000, "proud", true
         );
       }
     },
@@ -154,6 +203,24 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       clearTimeout(rotateTimer);
     };
   }, []);
+
+  // Touching anything else waves Granny away. Armed after a short delay so
+  // the very tap that produced the message cannot also dismiss it.
+  useEffect(() => {
+    if (!toast) return;
+    let armed = false;
+    const arm = window.setTimeout(() => { armed = true; }, 420);
+    const away = (e: PointerEvent) => {
+      if (!armed) return;
+      if ((e.target as HTMLElement)?.closest?.(".guide-toast")) return;
+      dismissToast();
+    };
+    window.addEventListener("pointerdown", away, { passive: true });
+    return () => {
+      window.clearTimeout(arm);
+      window.removeEventListener("pointerdown", away);
+    };
+  }, [toast, dismissToast]);
 
   // Tapping anywhere else waves the nudge away too — a hint you cannot get
   // rid of by touching the thing behind it just reads as broken.
@@ -591,12 +658,15 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
         />
 
         {toast && (
-          <div className="toast guide-toast">
+          <div className="toast guide-toast" role="status">
             <GuidePortrait mood={toast.mood} size={54} />
             <div className="guide-toast-text">
               <span className="guide-name">{GUIDE_NAME}</span>
               {toast.text}
             </div>
+            <button className="toast-close" onClick={dismissToast} aria-label="Dismiss">
+              <X size={16} strokeWidth={2.8} aria-hidden />
+            </button>
           </div>
         )}
       </div>
@@ -668,6 +738,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             {tab === "profile" && (
               <>
                 <LevelBar state={state} />
+                <ReminderSettings />
                 <ProfilePanel
                   state={state}
                   avatar={avatar}

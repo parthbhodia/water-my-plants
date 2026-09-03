@@ -2440,3 +2440,28 @@ button { font-family: var(--font); cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .plant-card-live.just-landed { animation: none; outline: 2px solid #3e8e52; }
 }
+
+/* Granny can be waved away — a cross, or a tap anywhere else. A message
+   that will not go until it decides to is the definition of nagging. */
+.guide-toast { position: relative; padding-right: 46px; }
+.toast-close {
+  position: absolute; top: 50%; right: 2px; transform: translateY(-50%);
+  display: grid; place-items: center;
+  width: 44px; height: 44px;
+  background: none; border: 0; cursor: pointer;
+  color: var(--ink-soft, #6b7a6e); border-radius: 12px;
+  opacity: .65;
+}
+.toast-close:hover, .toast-close:focus-visible { opacity: 1; }
+
+/* Reminder settings, moved out of the Today card so that card can leave
+   when there is nothing to report. */
+.reminder-settings {
+  background: var(--card, #fff);
+  border: 1px solid rgba(62, 142, 82, 0.18);
+  border-radius: 16px; padding: 14px; margin: 0 0 12px;
+}
+.rs-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rs-title { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; }
+.rs-sub { margin: 6px 0 0; font-size: .82rem; line-height: 1.45; color: var(--ink-soft, #6b7a6e); }
+.reminder-settings .bp-row { margin-top: 12px; }
