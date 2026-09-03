@@ -96,6 +96,17 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
    * swap depth as they cross behind the plant — occlusion is what sells depth
    * on a flat canvas, so the orbit is the whole trick.
    */
+  /**
+   * A dead plot's own idle language. Dying already had a language — red ring,
+   * alert pin, a shiver — but every one of those is gated on `lastDay`, which
+   * excludes `dead`. So the single state that most needs the player's
+   * attention was the only one the scene said nothing about at all.
+   *
+   * It must not borrow from either neighbour. The red alarm means "save me"
+   * and it is too late for that; the celebration particles are gold and pink.
+   * Dead is quiet, dull and earthbound — it asks for closure, not rescue.
+   */
+  private deadFx: Array<{ objs: Phaser.GameObjects.GameObject[] } | null> = [];
   private variantFx: Array<{
     key: string;
     objs: Phaser.GameObjects.GameObject[];
@@ -1519,10 +1530,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     if (!plant) {
       node.img.setVisible(false);
       this.syncVariantFx(i, null, false);
+      this.syncDeadFx(i, false);
       return;
     }
     const sp = SPECIES_BY_KEY[plant.species];
-    if (!sp) { node.img.setVisible(false); this.syncVariantFx(i, null, false); return; }
+    if (!sp) { node.img.setVisible(false); this.syncVariantFx(i, null, false); this.syncDeadFx(i, false); return; }
 
     const c = node.tex.getContext();
     c.clearRect(0, 0, PB_W * 2, PB_H * 2);
@@ -1534,6 +1546,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     node.tex.refresh();
     node.img.setVisible(true);
     this.syncVariantFx(i, plant.variant, plant.dead);
+    this.syncDeadFx(i, plant.dead);
 
     // A last-day plant trembles; anything healthier stands still. The tween
     // is tracked per plot — never discovered by walking the tween list, which
@@ -1549,6 +1562,74 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       this.shivers.delete(i);
       node.img.setAngle(0);
     }
+  }
+
+  /**
+   * Mark a plot whose plant is gone. Cheap to call repeatedly — it no-ops
+   * unless the dead state actually changed.
+   */
+  private syncDeadFx(i: number, dead: boolean) {
+    const have = !!this.deadFx[i];
+    if (have === dead) return;
+    if (!dead) {
+      this.deadFx[i]?.objs.forEach((o) => { this.tweens.killTweensOf(o); o.destroy(); });
+      this.deadFx[i] = null;
+      const img = this.plotNodes[i]?.img;
+      if (img) { this.tweens.killTweensOf(img); img.setAngle(0); }
+      return;
+    }
+
+    const p = PLOTS[i] ?? PLOTS[0];
+    const node = this.plotNodes[i];
+    const objs: Phaser.GameObjects.GameObject[] = [];
+    const base = YARD + p.y;
+
+    // A dull ring on the soil. Slow and low-contrast on purpose: the red
+    // alarm ring next door pulses fast because it is a countdown, and this
+    // one is not — it is a standing invitation to clear the bed.
+    const ring = this.add.graphics().setDepth(base - 0.5);
+    ring.lineStyle(3, 0x8d7a63, 0.55);
+    ring.strokeEllipse(p.x, p.y + 4, 62, 22);
+    objs.push(ring);
+    this.tweens.add({
+      targets: ring, alpha: { from: 0.35, to: 0.85 },
+      duration: 2400, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
+    });
+
+    // Leaves that already fell, resting where they landed.
+    const fallen = this.add.graphics().setDepth(base - 0.4);
+    fallen.fillStyle(0x8a7358, 0.75);
+    fallen.fillEllipse(p.x - 19, p.y + 7, 13, 5);
+    fallen.fillStyle(0x9c8465, 0.7);
+    fallen.fillEllipse(p.x + 15, p.y + 10, 11, 4);
+    fallen.fillStyle(0x7d6950, 0.65);
+    fallen.fillEllipse(p.x + 2, p.y + 13, 9, 4);
+    objs.push(fallen);
+
+    // One more leaf letting go, now and then. Dust brown, never the gold
+    // and pink of the sparkle emitter.
+    const drop = this.add.image(p.x + 8, p.y - 34, "petalbit")
+      .setTint(0x8a7358).setScale(0.8).setAlpha(0).setDepth(base + 0.5);
+    objs.push(drop);
+    this.tweens.add({
+      targets: drop,
+      y: p.y + 6, x: p.x - 6, angle: 200,
+      alpha: { from: 0.9, to: 0 },
+      duration: 2600, repeat: -1, repeatDelay: 3400, ease: "Sine.easeIn",
+    });
+
+    // The plant lists, and stays listed. Dying shivers — a fast tremble that
+    // reads as distress. This is the opposite: one slow lean that settles and
+    // does not come back up.
+    if (node?.img) {
+      this.tweens.killTweensOf(node.img);
+      this.tweens.add({
+        targets: node.img, angle: 5.5,
+        duration: 1800, ease: "Sine.easeOut",
+      });
+    }
+
+    this.deadFx[i] = { objs };
   }
 
   // ================= living variants =================
