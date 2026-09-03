@@ -276,6 +276,39 @@ running, or every event lands in a `currentTime` still frozen at the moment
 of suspension. And watch the master gain — 0.055 was a loop running
 perfectly that nobody could hear.
 
+## Email nudges: fail loudly, and keep the history honest
+
+`build_nudges()` (hourly, pg_cron) writes rows to `notification_queue`;
+the `send-nudges` edge function drains them through Resend. Secrets:
+`RESEND_API_KEY`, `NUDGE_FROM` (a real address on a verified domain),
+optional `NUDGE_REPLY_TO`.
+
+This system queued warnings for two weeks and delivered none, and a
+player's whole garden died un-warned, because `RESEND_API_KEY` was unset
+and the function answered **HTTP 200** anyway. pg_cron logged 3456
+consecutive "successes". Hence the rules:
+
+- **A queue with no key is 503, not 200.** Every send failing is 502.
+  `net._http_response` is the only place this is visible, so the status
+  code has to carry the truth. `pg_cron` reporting success means the
+  *request* was made, never that mail moved.
+- **One bad env var may not stop delivery.** `NUDGE_FROM` is validated and
+  falls back to a known-good sender; an invalid one warns rather than
+  failing the batch. A key once landed in that field and 422'd every
+  message.
+- **Never echo a rejected config value.** That warning copied the pasted
+  API key into the response log every five minutes. Describe the shape
+  ("what looks like an API key"), never the value.
+- **Nudges expire.** `expire_stale_nudges(2)` runs before every build. A
+  watering reminder is only true on the day it was built; a two-day-old
+  "won't last the night" about a plant that already died is worse than
+  silence.
+- **Retire, do not delete.** An undelivered row is marked `sent_at` with a
+  `send_error` saying why (`expired: ... never delivered`). Only rows with
+  `sent_at` *and* a null `send_error` were genuinely emailed — keep that
+  distinction true, so the table never claims to have told someone
+  something it did not.
+
 ## Guiding a lost player
 
 A player should never wonder what to do next:
