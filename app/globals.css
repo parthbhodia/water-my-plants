@@ -2465,3 +2465,54 @@ button { font-family: var(--font); cursor: pointer; }
 .rs-title { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; }
 .rs-sub { margin: 6px 0 0; font-size: .82rem; line-height: 1.45; color: var(--ink-soft, #6b7a6e); }
 .reminder-settings .bp-row { margin-top: 12px; }
+
+/* ---------- A plant that is gone ----------
+   The loss used to be announced by a 12px skull chip beside a thumbnail.
+   Weight here comes from scale, stillness and empty space — not from
+   harsher iconography, which in a game this warm would read as macabre
+   rather than sad. */
+.plant-card-live.gone { padding: 0 0 13px; overflow: hidden; }
+
+.pcl-mourn-band {
+  display: grid; place-items: center;
+  padding: 26px 0 20px;
+  background:
+    radial-gradient(120% 90% at 50% 120%, rgba(140,120,95,.22), transparent 70%),
+    linear-gradient(180deg, #eeeae4, #e2ddd5);
+  border-bottom: 1px solid rgba(150, 135, 112, .28);
+}
+/* fallen, not standing: the plant leans and stays leaning */
+.pcl-fallen {
+  display: block; filter: grayscale(1); opacity: .62;
+  transform: rotate(7deg) translateY(3px); transform-origin: 50% 100%;
+}
+/* the ground it came to rest on */
+.pcl-mourn-band::after {
+  content: ""; display: block;
+  width: 118px; height: 9px; margin-top: -4px;
+  border-radius: 50%;
+  background: rgba(120, 104, 82, .3);
+  filter: blur(2px);
+}
+
+.pcl-mourn-text {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 16px 15px 0;
+}
+.pcl-mourn-text b { font-size: 1.34rem; letter-spacing: -0.01em; line-height: 1.15; }
+.pcl-gone-line {
+  font-size: 1rem; font-weight: 600; color: #7d3520;
+}
+.plant-card-live.gone .pcl-sub { font-size: .8rem; }
+.plant-card-live.gone .plot-buttons { padding: 0 15px; margin-top: 14px; }
+
+/* it arrives, rather than appearing */
+@keyframes mourn-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+.plant-card-live.gone { animation: mourn-in 520ms cubic-bezier(.22,.65,.3,1); }
+@media (prefers-reduced-motion: reduce) {
+  .plant-card-live.gone { animation: none; }
+  .pcl-fallen { transform: rotate(7deg); }
+}

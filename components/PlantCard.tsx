@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   Droplets, Clock, Sun, Cloud, Waves, Sprout, Leaf, TriangleAlert, Sparkles,
-  ChevronDown, Skull, Flower2, FlaskConical, Nut, Scissors,
+  ChevronDown, Flower2, FlaskConical, Nut, Scissors,
 } from "lucide-react";
 import { SPECIES_BY_KEY, windowOpen, canWaterNow } from "@/lib/species";
 import { PLANT_FACTS } from "@/lib/plantfacts";
@@ -21,6 +21,17 @@ const PLOT_WORD = {
 const PLOT_LABEL = {
   sun: "A sunny plot", shade: "A shaded plot", water: "The pond",
 } as const;
+
+const DAY_WORDS = [
+  "No days", "One day", "Two days", "Three days", "Four days", "Five days",
+  "Six days", "Seven days", "Eight days", "Nine days", "Ten days",
+  "Eleven days", "Twelve days", "Thirteen days", "Fourteen days",
+];
+
+/** "Ten days" lands heavier than "10d" when it is the whole sentence. */
+function spellDays(n: number) {
+  return DAY_WORDS[n] ?? `${n} days`;
+}
 
 function daysBetween(a: string, b: string) {
   return Math.round(
@@ -105,28 +116,35 @@ export default function PlantCard({
     const goneFor = plant.lastCareOn ? daysBetween(plant.lastCareOn, state.today) : null;
     return (
       <section className="plant-card-live gone" aria-label={`${sp.name} died`}>
-        <header className="pcl-head">
-          <span className="pcl-art gone" aria-hidden>
-            <PlantIcon species={sp.key} stage={plant.stage} size={54} dead />
+        {/*
+          A small skull chip beside the word "Gone" was two harsh marks doing
+          one job, and still read as casual — the loss was announced in 12px
+          while the plant sat greyed out at thumbnail size. Weight comes from
+          scale and stillness, not from a scarier icon. So: a full-width
+          muted band, the plant large and fallen inside it, the name at
+          display size, and the span of neglect spelled out in words because
+          "Ten days" lands heavier than "10d".
+        */}
+        <div className="pcl-mourn-band" aria-hidden>
+          <span className="pcl-fallen">
+            <PlantIcon species={sp.key} stage={plant.stage} size={92} dead />
           </span>
-          <div className="pcl-id">
-            <b>
-              {sp.name}
-              <span className="pcl-tag dead"><Skull size={12} strokeWidth={2.8} aria-hidden /> Gone</span>
-            </b>
-            <span className="pcl-sub">
-              Plot {selected + 1} —{" "}
-              {goneFor !== null
-                ? `she went ${goneFor} days without water.`
-                : "she did not make it."}
-            </span>
-          </div>
-        </header>
+        </div>
+
+        <div className="pcl-mourn-text">
+          <b>{sp.name}</b>
+          <span className="pcl-gone-line">
+            {goneFor !== null
+              ? `${spellDays(goneFor)} without water.`
+              : "She did not make it."}
+          </span>
+          <span className="pcl-sub">Plot {selected + 1}</span>
+        </div>
 
         <div className="plot-buttons">
           {tonics > 0 ? (
             <button className="btn small" disabled={busy} onClick={() => onRevive(selected)}>
-              <FlaskConical size={15} strokeWidth={2.4} aria-hidden /> Revive ({tonics})
+              <FlaskConical size={15} strokeWidth={2.4} aria-hidden /> Revive her ({tonics})
             </button>
           ) : (
             <span className="pcl-note">
