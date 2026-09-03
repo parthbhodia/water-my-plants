@@ -483,6 +483,29 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     setMusicOpen(false);
   }, [showToast]);
 
+  /**
+   * "Go see" used to only call setSelected. When the plot it points at is
+   * already the selected one — which it always is when every plant is dead
+   * and the first dead plot is plot 1 — that is a no-op, and the button
+   * looked broken. It also never opened the sheet or scrolled, so even a
+   * real change happened below the fold, out of sight.
+   */
+  const goToPlantCard = useCallback(() => {
+    setTab("garden");
+    setSheetOpen(true);
+    // let the sheet finish expanding before measuring where the card landed
+    window.setTimeout(() => {
+      const card = document.querySelector(".plant-card-live");
+      if (!card) return;
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      card.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+      card.classList.remove("just-landed");
+      // reflow so the highlight replays even on repeated taps
+      void (card as HTMLElement).offsetWidth;
+      card.classList.add("just-landed");
+    }, 320);
+  }, []);
+
   const needCare = state
     ? state.plots.filter(
         (p) => p.plant && p.plant.thirsty && !p.plant.isBloomed && !p.plant.dead
@@ -610,7 +633,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
                     sfx.click();
                     setSelected(idx);
                     bridge.select(idx);
-                    if (plant) setSeedFor(state.plots[idx]);
+                    if (plant) { setSeedFor(state.plots[idx]); return; }
+                    goToPlantCard();
                   }}
                 />
                 <PlantCard

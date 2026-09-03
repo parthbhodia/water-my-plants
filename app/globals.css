@@ -2428,3 +2428,15 @@ button { font-family: var(--font); cursor: pointer; }
 .plant-card-live .pcl-more {
   min-height: 44px; padding: 12px 6px; align-self: flex-start;
 }
+
+/* "Go see" must show the player it did something, even when the plot it
+   points at was already selected — otherwise the button reads as dead. */
+@keyframes card-landed {
+  0%   { box-shadow: 0 0 0 0 rgba(62,142,82,.55); }
+  40%  { box-shadow: 0 0 0 5px rgba(62,142,82,.28); }
+  100% { box-shadow: 0 0 0 0 rgba(62,142,82,0); }
+}
+.plant-card-live.just-landed { animation: card-landed 1.1s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .plant-card-live.just-landed { animation: none; outline: 2px solid #3e8e52; }
+}
