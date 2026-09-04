@@ -43,6 +43,10 @@ const WALK_BOTTOM = 588;
 // Depth band for anything standing in the yard: sorting by y makes the
 // gardener pass behind far plants and in front of near ones.
 const YARD = 100;
+// The pour arc: droplets fall under this gravity and are aimed to reach the
+// plant in POUR_T seconds, whichever side of the spout it is on.
+const DROP_G = 760;
+const POUR_T = 0.4;
 const HX = 152; // house anchor
 
 /** Plot positions. `kind` mirrors the database's plot_kind(idx) exactly. */
@@ -2159,10 +2163,30 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
     // One emitter per facing direction: the stream must arc *toward* the pond,
     // so speedX is mirrored rather than always-positive.
+    // startPour() re-solves speedX and lifespan against the real distance
+    // every time; these are only the shape of the stream.
+    //
+    // Both speeds have to be plain NUMBERS, not {min,max}: EmitterOp.onChange
+    // sets `current`, which only a static-value op ever reads back — on a
+    // min/max op it is clamped into the old range and then ignored, so the
+    // aim silently did nothing and every pour still used the hard-coded
+    // throw. The stream gets its life from a small emit zone instead, so
+    // droplets leave the spout scattered rather than single file.
     const dropletCfg = (dir: 1 | -1) => ({
-      speedX: { min: Math.min(dir * 95, dir * 150), max: Math.max(dir * 95, dir * 150) },
-      speedY: { min: -10, max: 30 },
-      gravityY: 760,
+      speedX: dir * 120,
+      speedY: 10,
+      gravityY: DROP_G,
+      emitZone: {
+        type: "random" as const,
+        // a hand-rolled source: Phaser.Geom.Rectangle's own getRandomPoint
+        // does not satisfy RandomZoneSourceCallback in the shipped types
+        source: {
+          getRandomPoint: (point: Phaser.Types.Math.Vector2Like) => {
+            point.x = Phaser.Math.Between(-4, 4);
+            point.y = Phaser.Math.Between(-5, 5);
+          },
+        },
+      },
       lifespan: 330,
       quantity: 2,
       frequency: 22,
@@ -2364,11 +2388,40 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       if (!this.pouring) return;
       const dir = this.player.flipX ? -1 : 1;
       const em = dir === 1 ? this.dropletsR : this.dropletsL;
-      // spout tip of the tilted can, mirrored AND scaled with the sprite
-      em.setPosition(
-        this.player.x + dir * SPOUT_OFFSET.x * this.player.scaleX,
-        this.player.y + SPOUT_OFFSET.y * this.player.scaleY
+      // Spout tip of the tilted can, mirrored AND scaled with the sprite.
+      //
+      // SPOUT_OFFSET is in LOGICAL frame units, and the frames are painted
+      // at 2x — so one logical unit is two texture pixels, and the sprite's
+      // own scale then maps texture pixels to world pixels. The conversion
+      // is 2 * scale, not scale. Multiplying by the scale alone put the
+      // stream at half the reach and half the height: about 30px above his
+      // feet, which is his hip. The water came out of his trousers.
+      const u = 2 * this.player.scaleX;
+      const v = 2 * this.player.scaleY;
+      const ex = this.player.x + dir * SPOUT_OFFSET.x * u;
+      const ey = this.player.y + SPOUT_OFFSET.y * v;
+      em.setPosition(ex, ey);
+
+      // Aim, rather than guess. The old horizontal throw was tuned against
+      // the WRONG origin — it only ever landed on the bed because the two
+      // errors cancelled — so correcting the spout without correcting the
+      // aim threw the stream clean past it.
+      //
+      // Fix the flight time and solve both speeds for it. Choosing the time
+      // rather than deriving it from the fall is what makes a POND plot
+      // work: the lily sits further back, which is *higher* on screen than
+      // the bank he stands on, and no amount of downward speed will reach
+      // something above the spout. A fixed T just asks for an upward toss
+      // instead, and the same line covers both.
+      const tgt = PLOTS[this.pendingPlot] ?? PLOTS[0];
+      // ops.speedX, not setParticleSpeed(): that helper flips the emitter
+      // into radial mode, where the angle op takes over and the stream
+      // stops being a stream.
+      em.ops.speedX.onChange((tgt.x - ex) / POUR_T);
+      em.ops.speedY.onChange(
+        (tgt.y - ey - 0.5 * DROP_G * POUR_T * POUR_T) / POUR_T
       );
+      em.setParticleLifespan(POUR_T * 1000 + 45);
       em.start();
       this.pourSplashTimer = this.time.addEvent({
         delay: 130,

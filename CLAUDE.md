@@ -174,6 +174,17 @@ Three ways in, because hunting for a button is not a ritual:
   overwaterable species like the cactus.
 - **The floating button** (`WaterFab`) lives on the stage, never inside the
   pull-up sheet, so watering is one thumb-reach on a phone.
+- **The stream starts at the spout and is aimed, not guessed.**
+  `SPOUT_OFFSET` is in *logical frame units* and the frames are painted at
+  2x, so converting to world pixels is `2 * sprite.scale` — multiplying by
+  the scale alone put the origin at half the height, which is his hip, and
+  the water poured out of his trousers. The droplet speeds are then solved
+  to reach the plant in a fixed `POUR_T`; deriving the time from the fall
+  instead would have no solution for a **pond** plot, where the lily sits
+  further back and therefore *higher* on screen than the bank he stands on.
+  Both emitter speeds must stay plain numbers: `EmitterOp.onChange` only
+  writes `current`, which a `{min,max}` op never reads back, so aiming one
+  silently does nothing. Scatter comes from the emit zone.
 - **Water all** runs the day's round in sequence, walking plant to plant.
   Each pour escalates a combo flourish and the round ends in confetti.
 
