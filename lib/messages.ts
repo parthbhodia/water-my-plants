@@ -53,17 +53,34 @@ export function tendMessage(r: TendResult, playerName?: string | null): string {
   const who = (playerName ?? "").trim().split(/\s+/)[0] ?? "";
   const you = who.length > 1 && who.length <= 16 ? who : "";
 
+  // A pond plant is not drinking; the level is coming up. Same result row,
+  // honest words — the card and the button say it this way too.
+  const pond = sp?.needsPlot === "water";
+
   switch (r.status) {
     case "watered":
       if (r.bloomedNow)
         return `🌸 ${you ? `${you}, you did it — ` : ""}${name} reached full bloom! +${r.dewEarned} dewdrops. Harvest it to free the plot.`;
-      if (r.wasWilted) return `${name} perks back up. Try not to leave it so long! +${r.dewEarned} 💧`;
-      if (r.grew) return pick([
-        `${name} grew a stage${you ? `, ${you}` : ""}! +${r.dewEarned} dewdrops ✨`,
-        `Fresh water, new growth. +${r.dewEarned} dewdrops`,
-        `There she goes${you ? `, ${you}` : ""} — a whole new stage. +${r.dewEarned} 💧`,
-      ]);
-      return `Watered. +${r.dewEarned} dewdrops`;
+      if (r.wasWilted)
+        return pond
+          ? `The level comes back up and ${name} floats free again. Try not to leave it so long! +${r.dewEarned} 💧`
+          : `${name} perks back up. Try not to leave it so long! +${r.dewEarned} 💧`;
+      if (r.grew) return pick(
+        pond
+          ? [
+              `The pond is full again and ${name} spread a stage${you ? `, ${you}` : ""}! +${r.dewEarned} dewdrops ✨`,
+              `Level held, pad grown. +${r.dewEarned} dewdrops`,
+              `There she goes${you ? `, ${you}` : ""} — riding a little higher. +${r.dewEarned} 💧`,
+            ]
+          : [
+              `${name} grew a stage${you ? `, ${you}` : ""}! +${r.dewEarned} dewdrops ✨`,
+              `Fresh water, new growth. +${r.dewEarned} dewdrops`,
+              `There she goes${you ? `, ${you}` : ""} — a whole new stage. +${r.dewEarned} 💧`,
+            ]
+      );
+      return pond
+        ? `Pond topped up. +${r.dewEarned} dewdrops`
+        : `Watered. +${r.dewEarned} dewdrops`;
     case "fed":
       return `${name} has been fed. +${r.dewEarned} dewdrops 🌰`;
     case "pruned":
@@ -71,6 +88,7 @@ export function tendMessage(r: TendResult, playerName?: string | null): string {
     case "already":
       return r.reason ?? "She's had her drink for today. Stay and watch her sway — or see how the neighbours are doing. 🌿";
     case "not_thirsty":
+      if (pond) return "The pond is already up to the mark — save your arms for tomorrow.";
       return sp
         ? `${name} drinks every ${sp.cadenceDays} days — it isn't thirsty yet.`
         : "Not thirsty yet.";

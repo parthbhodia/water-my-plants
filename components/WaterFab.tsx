@@ -2,7 +2,7 @@
 
 import { Droplets, Sparkles } from "lucide-react";
 import type { GardenState } from "@/lib/types";
-import { SPECIES_BY_KEY, canWaterNow } from "@/lib/species";
+import { SPECIES_BY_KEY, canWaterNow, tendVerb } from "@/lib/species";
 
 /**
  * Watering lives on the stage, not inside the pull-up sheet. One thumb-sized
@@ -29,6 +29,11 @@ export default function WaterFab({
   const cur = state.plots[selected];
   const curCan = canWaterNow(cur?.plant, state.hour);
   const sp = cur?.plant ? SPECIES_BY_KEY[cur.plant.species] : null;
+  // The button names the plant it will actually act on, which is not the
+  // selected one when the selection cannot drink.
+  const tgt = curCan ? cur : due[0];
+  const tgtSp = tgt?.plant ? SPECIES_BY_KEY[tgt.plant.species] : null;
+  const tgtPond = tgtSp?.needsPlot === "water";
 
   if (roundLeft > 0) {
     return (
@@ -60,11 +65,13 @@ export default function WaterFab({
         className="water-fab"
         disabled={busy}
         onClick={() => onWater(curCan ? selected : due[0].idx)}
-        aria-label="Water this plant"
+        aria-label={tgtPond ? "Top up the pond" : "Water this plant"}
       >
         <Droplets size={24} strokeWidth={2.6} aria-hidden />
         <span className="wf-label">
-          {curCan ? `Water ${sp?.name.split(" ").pop() ?? "it"}` : `Water plot ${due[0].idx + 1}`}
+          {tgtPond
+            ? curCan ? "Top up the pond" : `Top up plot ${due[0].idx + 1}`
+            : curCan ? `Water ${sp?.name.split(" ").pop() ?? "it"}` : `Water plot ${due[0].idx + 1}`}
         </span>
       </button>
     </div>

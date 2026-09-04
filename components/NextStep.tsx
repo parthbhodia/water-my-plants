@@ -49,14 +49,25 @@ export default function NextStep({
       cta: "Go see" };
   } else if (dying) {
     const sp = SPECIES_BY_KEY[dying.plant!.species];
+    const pond = sp?.needsPlot === "water";
     step = { icon: CircleAlert, kind: "dying", idx: dying.idx, plant: false,
-      title: `Water the ${sp?.name} — today or never`,
-      body: "One more dry day and she is gone for good.", cta: "Save her" };
+      title: pond
+        ? `Top up the pond — today or never`
+        : `Water the ${sp?.name} — today or never`,
+      body: pond
+        ? "One more day at this level and she strands on the mud."
+        : "One more dry day and she is gone for good.",
+      cta: "Save her" };
   } else if (thirsty) {
     const sp = SPECIES_BY_KEY[thirsty.plant!.species];
+    // She floats — she is not thirsty. The pond is low.
+    const pond = sp?.needsPlot === "water";
     step = { icon: Droplets, kind: "thirsty", idx: thirsty.idx, plant: false,
-      title: `Your ${sp?.name} is thirsty`,
-      body: `Plot ${thirsty.idx + 1} — one drink is all it takes today.`, cta: "Go water" };
+      title: pond ? `The pond needs topping up` : `Your ${sp?.name} is thirsty`,
+      body: pond
+        ? `Plot ${thirsty.idx + 1} — a can over the side holds the level for the day.`
+        : `Plot ${thirsty.idx + 1} — one drink is all it takes today.`,
+      cta: pond ? "Go top up" : "Go water" };
   } else if (empty) {
     const kindWord = empty.kind === "water" ? "the pond" : empty.kind === "shade" ? "a shaded plot" : "a sunny plot";
     step = { icon: Sprout, kind: "empty", idx: empty.idx, plant: true,

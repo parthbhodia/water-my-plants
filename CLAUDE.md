@@ -185,6 +185,14 @@ Three ways in, because hunting for a button is not a ritual:
   Both emitter speeds must stay plain numbers: `EmitterOp.onChange` only
   writes `current`, which a `{min,max}` op never reads back, so aiming one
   silently does nothing. Scatter comes from the emit zone.
+- **A pond plant is not thirsty — the pond is.** A lily floats, so "Water"
+  was a verb the game could not justify, and the card admitted as much
+  ("she is never really thirsty") while the button insisted otherwise.
+  `tendVerb()` in `lib/species.ts` gives any `needsPlot: "water"` species the
+  honest words — *Top up* — and the scene matches: the can is aimed at the
+  open water in front of the pad, and `wetSoil` hands over to `pondRise`,
+  because there is no soil to darken and the level coming up is the whole
+  point. The RPC is still `water`; only the words and the aim changed.
 - **Water all** runs the day's round in sequence, walking plant to plant.
   Each pour escalates a combo flourish and the round ends in confetti.
 

@@ -2413,7 +2413,13 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       // the bank he stands on, and no amount of downward speed will reach
       // something above the spout. A fixed T just asks for an upward toss
       // instead, and the same line covers both.
-      const tgt = PLOTS[this.pendingPlot] ?? PLOTS[0];
+      const plt = PLOTS[this.pendingPlot] ?? PLOTS[0];
+      // A lily is not thirsty — she is floating. What runs low at a pond is
+      // the pond, so the can is aimed at the open water in front of the pad
+      // rather than at the plant, and the level comes up around her.
+      const tgt = plt.kind === "water"
+        ? { x: plt.x - dir * 12, y: plt.y + 26 }
+        : plt;
       // ops.speedX, not setParticleSpeed(): that helper flips the emitter
       // into radial mode, where the angle op takes over and the stream
       // stops being a stream.
@@ -2427,10 +2433,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         delay: 130,
         loop: true,
         callback: () => {
-          const tgt = PLOTS[this.pendingPlot] ?? PLOTS[0];
+          const t = PLOTS[this.pendingPlot] ?? PLOTS[0];
+          const pond = t.kind === "water";
           this.pourSplashes.push({
-            x: tgt.x + Phaser.Math.Between(-14, 14),
-            y: tgt.y + Phaser.Math.Between(-4, 10),
+            x: t.x + Phaser.Math.Between(-14, 14) - (pond ? dir * 12 : 0),
+            y: t.y + Phaser.Math.Between(-4, 10) + (pond ? 24 : 0),
             t0: this.time.now,
           });
         },
@@ -2454,6 +2461,42 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.dropletsL.stop();
     this.player.play("idle");
     this.player.setTexture("g_idle_0");
+  }
+
+  /**
+   * The pond taking the water: a pale sheen spreading off where the can went
+   * in, and the pad lifting a little as the level comes up. No wet-soil
+   * patch, no darkening — the surface was already water.
+   */
+  private pondRise(i: number) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    const sheen = this.add
+      .graphics({ x: p.x, y: p.y + 14 })
+      .setDepth(YARD + p.y - 0.7)
+      .setAlpha(0);
+    sheen.fillStyle(0xcdeaff, 0.3);
+    sheen.fillEllipse(0, 0, 54, 18);
+    this.tweens.chain({
+      targets: sheen,
+      tweens: [
+        { alpha: 1, scaleX: 1.5, scaleY: 1.3, duration: 420, ease: "Sine.easeOut" },
+        { alpha: 0, scaleX: 2.2, scaleY: 1.7, duration: 1400, ease: "Sine.easeIn" },
+      ],
+      onComplete: () => sheen.destroy(),
+    });
+
+    // the pad rides the rising level, then settles
+    const img = this.plotNodes[i]?.img;
+    if (img && !this.shivers.get(i)) {
+      const y0 = img.y;
+      this.tweens.chain({
+        targets: img,
+        tweens: [
+          { y: y0 - 5, duration: 420, ease: "Sine.easeOut" },
+          { y: y0, duration: 900, ease: "Sine.easeInOut" },
+        ],
+      });
+    }
   }
 
   private splashAt(i: number) {
@@ -2588,6 +2631,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   /** A dark, glistening patch soaks into the soil and dries away. */
   private wetSoil(i: number) {
     const p = PLOTS[i] ?? PLOTS[0];
+    // There is no soil to darken in a pond, and painting a wet patch on open
+    // water was the scene quietly agreeing with the button that said Water.
+    // The pond answers differently: the level lifts and the pad rides it.
+    if (p.kind === "water") { this.pondRise(i); return; }
     const g = this.add.graphics().setDepth(YARD + p.y - 0.7).setAlpha(0);
     g.fillStyle(0x2e5e8a, 0.32);
     g.fillEllipse(p.x, p.y + 4, 66, 24);

@@ -14,9 +14,13 @@ export type PlantFact = {
 
 export const PLANT_FACTS: Record<string, PlantFact> = {
   lily: {
-    why: "She lives with her feet in the pond, so she is never really thirsty — topping her up is more of a hello than a rescue.",
-    didYouKnow: "A lily pad's waxy top sheds rain so beads roll clean off, and the stomata sit on top instead of underneath — the only place they can breathe.",
-    tooMuch: "Nothing dreadful. She is already floating.",
+    // "She is never really thirsty" was a shrug, not an answer — and it left
+    // the daily visit looking pointless while the button still said Water.
+    // You are not watering the lily. You are topping up the pond she floats
+    // in, which is a real job with a real deadline.
+    why: "You are not watering her — you are topping up the pond. A pond loses an inch a week to the summer sun, and her stem is cut to one depth: let the level fall and the pad strands on the mud and cooks.",
+    didYouKnow: "A lily pad's waxy top sheds rain so beads roll clean off, and its breathing pores sit on TOP of the leaf instead of underneath — the only side that ever meets the air.",
+    tooMuch: "Nothing dreadful — a pond takes what you give it. But the level is already up, so save your arms for tomorrow.",
   },
   sunflower: {
     why: "She drinks like a horse but only while the sun is up, because that is when she is actually moving water through those big leaves.",

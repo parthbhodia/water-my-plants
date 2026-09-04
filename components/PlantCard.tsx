@@ -5,7 +5,7 @@ import {
   Droplets, Clock, Sun, Cloud, Waves, Sprout, Leaf, TriangleAlert, Sparkles,
   ChevronDown, Flower2, FlaskConical, Nut, Scissors,
 } from "lucide-react";
-import { SPECIES_BY_KEY, windowOpen, canWaterNow } from "@/lib/species";
+import { SPECIES_BY_KEY, windowOpen, canWaterNow, tendVerb } from "@/lib/species";
 import { PLANT_FACTS } from "@/lib/plantfacts";
 import { VARIANT_BY_KEY } from "@/lib/variants";
 import type { GardenState, PlotState, PlantState } from "@/lib/types";
@@ -160,17 +160,25 @@ export default function PlantCard({
   }
 
   // ---- alive: one status line, the actions, details on request ----
+  // A plant floating in a pond is not thirsty and never will be, so it gets
+  // the honest verb: what is running low there is the pond.
+  const verb = tendVerb(sp);
+  const pond = sp.needsPlot === "water";
   const statusLine = plant.isBloomed
     ? "In full bloom — harvest to free the plot."
     : plant.overdueDays >= 3
     ? "Last chance — she dies tonight."
     : plant.wilted
-    ? `Wilting, ${plant.overdueDays} day${plant.overdueDays === 1 ? "" : "s"} late.`
+    ? pond
+      ? `The level has dropped, ${plant.overdueDays} day${plant.overdueDays === 1 ? "" : "s"} now.`
+      : `Wilting, ${plant.overdueDays} day${plant.overdueDays === 1 ? "" : "s"} late.`
     : plant.thirsty
-    ? inWindow ? "Thirsty right now." : "Thirsty, but not during these hours."
+    ? inWindow ? verb.due : "Thirsty, but not during these hours."
     : dueIn > 0
-    ? `Watered. Next drink in ${dueIn} day${dueIn === 1 ? "" : "s"}.`
-    : "Watered for today.";
+    ? pond
+      ? `Topped up. The pond will want you again in ${dueIn} day${dueIn === 1 ? "" : "s"}.`
+      : `Watered. Next drink in ${dueIn} day${dueIn === 1 ? "" : "s"}.`
+    : pond ? "Topped up for today." : "Watered for today.";
 
   const tone = plant.isBloomed ? "bloom"
     : plant.overdueDays >= 3 ? "urgent"
@@ -229,7 +237,7 @@ export default function PlantCard({
             disabled={busy}
             onClick={() => onTend(selected, "water")}
           >
-            <Droplets size={15} strokeWidth={2.4} aria-hidden /> Water
+            <Droplets size={15} strokeWidth={2.4} aria-hidden /> {verb.button}
           </button>
         )}
         {!plant.isBloomed && sp.feedsRequired > plant.feedsDone && (
@@ -263,7 +271,7 @@ export default function PlantCard({
         <div className="pcl-detail">
           <dl className="pcl-rules">
             <div>
-              <dt><Droplets size={14} strokeWidth={2.5} aria-hidden /> Drinks</dt>
+              <dt><Droplets size={14} strokeWidth={2.5} aria-hidden /> {pond ? "Topped up" : "Drinks"}</dt>
               <dd>{sp.cadenceDays === 1 ? "every day" : `every ${sp.cadenceDays} days`}</dd>
             </div>
             <div>

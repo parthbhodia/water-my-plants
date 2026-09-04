@@ -122,6 +122,21 @@ export function windowOpen(s: SpeciesDef, hour: number): boolean {
     : hour >= s.windowStart || hour < s.windowEnd;
 }
 
+/**
+ * What the day's visit is actually called for this species.
+ *
+ * A plant standing in a pond is not thirsty, and calling the button "Water"
+ * made the whole daily act look pointless — the card even admitted she was
+ * never thirsty while the button insisted otherwise. The RPC is still
+ * `water`; only the words change, because what you are doing at a pond is
+ * holding the level up, not giving her a drink.
+ */
+export function tendVerb(s: SpeciesDef | null | undefined) {
+  return s?.needsPlot === "water"
+    ? { button: "Top up", doing: "topping up the pond", due: "The pond is low." }
+    : { button: "Water", doing: "watering", due: "Thirsty right now." };
+}
+
 /** Can this plant take a drink right now? The one source of truth. */
 export function canWaterNow(
   plant: { thirsty: boolean; isBloomed: boolean; dead: boolean; species: string } | null | undefined,
