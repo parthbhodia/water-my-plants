@@ -91,6 +91,12 @@ export type Pose = {
   blink?: boolean;
   /** watering can placement, in frame-logical coords */
   can?: { x: number; y: number; tilt: number };
+  /** rake placement, same coords — held in the forward hand */
+  rake?: { x: number; y: number; tilt: number };
+  /** whole body sinks toward the ground (kneeling, crouching) */
+  drop?: number;
+  /** whole body tips forward from the feet (leaning into the work) */
+  lean?: number;
 };
 
 // ---- Frame geometry (logical units; textures are painted at 2x) ----
@@ -112,6 +118,13 @@ export const POSES: Array<[string, Pose]> = [
   // Pouring: right arm reaches up-forward to the can, can tilts spout DOWN-forward.
   ["g_pour_0", { legL: -0.08, legR: 0.12, armL: 0.3, armR: -1.75, can: { x: 74, y: 36, tilt: 0.14 } }],
   ["g_pour_1", { legL: -0.08, legR: 0.12, armL: 0.3, armR: -1.85, can: { x: 74, y: 34, tilt: 0.6 } }],
+  // Working the soil by hand: down on one knee, tipped forward, both hands
+  // low. `_0` takes hold, `_1` draws up — pairing them is the whole pull.
+  ["g_kneel_0", { legL: 1.18, legR: -0.5, armL: -0.5, armR: -0.95, drop: 15, lean: 0.16 }],
+  ["g_kneel_1", { legL: 1.18, legR: -0.5, armL: -0.28, armR: -0.55, drop: 11, lean: 0.05 }],
+  // Raking level: `_0` reaches out, `_1` pulls the head back toward the feet.
+  ["g_rake_0", { legL: -0.32, legR: 0.26, armL: -0.4, armR: -1.25, lean: 0.12, rake: { x: 80, y: 52, tilt: -0.5 } }],
+  ["g_rake_1", { legL: 0.2, legR: -0.16, armL: -0.2, armR: -0.85, lean: -0.02, rake: { x: 70, y: 53, tilt: -0.22 } }],
 ];
 
 /**
@@ -119,6 +132,22 @@ export const POSES: Array<[string, Pose]> = [
  * Caller is responsible for any scaling (textures use c.scale(2, 2)).
  */
 export function paintGardener(c: Ctx, p: Pose, av: Avatar) {
+  // A kneel is not a set of joint angles — it is the whole body arriving
+  // lower and tipped forward. Doing it here, once, keeps every limb, the
+  // face and any held tool consistent with each other for free.
+  if (p.drop || p.lean) {
+    c.save();
+    c.translate(BODY_CX, FEET_LY);
+    c.rotate(p.lean ?? 0);
+    c.translate(-BODY_CX, -FEET_LY + (p.drop ?? 0));
+    paintFigure(c, p, av);
+    c.restore();
+    return;
+  }
+  paintFigure(c, p, av);
+}
+
+function paintFigure(c: Ctx, p: Pose, av: Avatar) {
   const skin = SKINS[av.skin] ?? SKINS[0];
   const hair = HAIRS[av.hair] ?? HAIRS[0];
   const hat = HATS[av.hat] ?? HATS[0];
@@ -189,6 +218,21 @@ export function paintGardener(c: Ctx, p: Pose, av: Avatar) {
     c.fillStyle = "#6a9cb5"; ell(c, 29, -13, 3.5, 2); c.fill();
     c.strokeStyle = "#7fa8bd"; c.lineWidth = 3;
     c.beginPath(); c.arc(8, -10, 7, Math.PI, 0, false); c.stroke();
+    c.restore();
+  }
+
+  // ---- rake (head on the ground, forward of the gardener) ----
+  if (p.rake) {
+    c.save();
+    c.translate(p.rake.x, p.rake.y);
+    c.rotate(p.rake.tilt);
+    c.fillStyle = lg(c, -3, 0, 3, 0, [[0, "#c79a63"], [0.55, "#a97f48"], [1, "#8d6437"]]);
+    rr(c, -2.5, -30, 5, 78, 2.5); c.fill();
+    c.fillStyle = "#7e8794";
+    rr(c, -11, 44, 22, 4.5, 2); c.fill();
+    for (let k = 0; k < 5; k++) { rr(c, -9.6 + k * 4.6, 47, 2.6, 8, 1.3); c.fill(); }
+    c.fillStyle = "rgba(255,255,255,0.3)";
+    rr(c, -10, 44.6, 8, 1.4, 0.7); c.fill();
     c.restore();
   }
 

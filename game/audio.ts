@@ -44,6 +44,42 @@ class Sfx {
     osc.stop(t0 + dur + 0.05);
   }
 
+  /**
+   * A short burst of filtered noise. Earth does not have a pitch, and every
+   * other sound in here is an oscillator — soil, roots and a rake need this
+   * or they come out sounding like a xylophone.
+   */
+  private noise(dur: number, gain: number, hz: number, delay = 0, q = 0.9, sweepTo = 0) {
+    if (this.muted) return;
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const t0 = ctx.currentTime + delay;
+    const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      // brown-ish, like the rain loop: white noise reads as static, not dirt
+      const w = Math.random() * 2 - 1;
+      last = (last + 0.06 * w) / 1.06;
+      d[i] = last * 3.2;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.setValueAtTime(hz, t0);
+    if (sweepTo) bp.frequency.exponentialRampToValueAtTime(Math.max(sweepTo, 40), t0 + dur);
+    bp.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + Math.min(0.02, dur * 0.3));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp).connect(g).connect(ctx.destination);
+    src.start(t0);
+    src.stop(t0 + dur + 0.05);
+  }
+
   click() { this.tone(660, 0.08, "triangle", 0.12); }
 
   pour() {
@@ -79,6 +115,46 @@ class Sfx {
     this.tone(1047, 0.7, "triangle", 0.14, 0.26);
     this.tone(1568, 0.5, "sine", 0.07, 0.34);
     this.tone(262, 1.1, "sine", 0.09, 0.1);
+  }
+
+  // ---- the hands-on rituals ----
+  //
+  // Clearing a bed descends: 196 -> 131/98 -> 88 -> 58 Hz. That is the exact
+  // inverse of comboSplash, which climbs a semitone per plant in a watering
+  // round. Every other cue in the game is major-key and rising, and playing
+  // any of them over a plant being pulled out of the ground would
+  // congratulate the player for a loss.
+
+  /** Taking hold. One dry tap, and the top of the ladder. */
+  take() { this.tone(196, 0.09, "triangle", 0.09); this.noise(0.07, 0.05, 900); }
+
+  /** Roots letting go — two low notes under a tearing rustle. */
+  uproot() {
+    this.tone(131, 0.22, "sine", 0.1, 0, 104);
+    this.tone(98, 0.3, "triangle", 0.07, 0.06, 82);
+    this.noise(0.34, 0.055, 1400, 0.02, 0.6, 420);
+  }
+
+  /** The break: the last root gives. Shortest beat, lowest note. */
+  snap() { this.tone(88, 0.16, "square", 0.07, 0, 62); this.noise(0.09, 0.07, 2200, 0, 1.4, 700); }
+
+  /** Levelling the bed. Barely a pitch at all — just a long, low sweep. */
+  rake() { this.noise(0.42, 0.06, 620, 0, 0.5, 180); this.tone(58, 0.4, "sine", 0.05, 0.04); }
+
+  /** A seed pressed into the soil. */
+  press() { this.tone(262, 0.08, "triangle", 0.08); this.noise(0.06, 0.045, 700); }
+
+  /** Two pats to firm the earth over it. */
+  pat() { this.noise(0.05, 0.06, 480); this.noise(0.05, 0.05, 420, 0.12); }
+
+  /** It is in. Two rising notes and no more — the bloom fanfare is six. */
+  sprout() { this.tone(392, 0.16, "triangle", 0.1); this.tone(523, 0.3, "triangle", 0.11, 0.11); }
+
+  /** Snipping a bloom free: metal on stem, twice. */
+  snip() {
+    this.tone(1320, 0.05, "square", 0.05);
+    this.tone(1568, 0.06, "square", 0.05, 0.07);
+    this.noise(0.05, 0.03, 3000, 0.01, 2);
   }
 
   bloom() {

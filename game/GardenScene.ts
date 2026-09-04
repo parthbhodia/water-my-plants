@@ -1,11 +1,14 @@
 import * as Phaser from "phaser";
-import type { GameBridge, SceneApi } from "./bridge";
+import type { GameBridge, RitualKind, SceneApi } from "./bridge";
 import type { GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
 import { drawPlant, bloomScale, plantHeightPx } from "./plants";
 import { SPECIES_BY_KEY } from "@/lib/species";
 import { DECOR_SLOTS, drawDecor, drawKoi } from "./decor";
 import { FIXTURES, ZONE_FOG, FIX_W, FIX_H, FIX_BX, FIX_BY } from "./fixtures";
 import { VARIANT_BY_KEY } from "@/lib/variants";
+// The beats are scheduled here, so the sounds are triggered here: routing
+// them back through React would put a render between a hand and its noise.
+import { sfx } from "./audio";
 import { type Ctx, type Stop, lg, rgrad, rr, ell, blob, petalPath } from "./draw";
 import {
   type Avatar,
@@ -193,6 +196,17 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private nearPond = false;
   private nightF = 0;
   private pourSafety: Phaser.Time.TimerEvent | null = null;
+  /** A hands-on ritual (clear / harvest / sow) is playing at a plot. */
+  private ritualing = false;
+  /** The gardener is walking to a ritual — scripted, so a freeze must not eat it. */
+  private ritualWalking = false;
+  private pendingRitual: (() => void) | null = null;
+  private ritualGhost: Phaser.GameObjects.Image | null = null;
+  private ritualPlot = -1;
+  private ritualDone: (() => void) | null = null;
+  private ritualTimers: Phaser.Time.TimerEvent[] = [];
+  private reducedMotion = false;
+  private crumbs!: Phaser.GameObjects.Particles.ParticleEmitter;
   private pourSplashTimer: Phaser.Time.TimerEvent | null = null;
   private hourOverride: number | null = null;
 
@@ -289,7 +303,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       const wasPan = this.panActive || this.input.pointer2?.isDown;
       this.panActive = false;
       this.pinchDist = 0;
-      if (wasPan || this.frozen) return;
+      if (wasPan || this.frozen || this.ritualing || this.ritualWalking) return;
       const moved = Phaser.Math.Distance.Between(p.x, p.y, this.downAt.x, this.downAt.y);
       if (moved > 14) return; // a drag, not a tap
       let best = -1;
@@ -424,7 +438,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   /** Freezes walking and taps while React shows a full-screen panel. */
   setFrozen(v: boolean) {
     this.frozen = v;
-    if (v) {
+    // A ritual walk is the scene's own, not the player's: clearing it here
+    // stranded the gardener halfway to the bed whenever the modal that
+    // started the ritual closed a frame later, and only the watchdog
+    // noticed.
+    if (v && !this.ritualWalking) {
       this.autoTarget = null;
       this.pendingPour = false;
       if (this.isWalking()) this.player?.play("idle");
@@ -433,7 +451,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
   /** Walk to a plot, then perform the action there. */
   requestTend(plotIdx: number, action: TendAction) {
-    if (this.pouring || this.celebrating || this.frozen) return;
+    if (this.pouring || this.celebrating || this.frozen || this.ritualing || this.ritualWalking) return;
     if (!this.plotUnlocked(plotIdx)) return;
     this.selected = plotIdx;
     this.pendingAction = action;
@@ -1011,6 +1029,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     g.fillRoundedRect(0, 0, 10, 6, 3);
     g.generateTexture("leafdry", 10, 6);
     g.clear();
+    g.fillStyle(0xd9c48f, 1);
+    g.fillEllipse(4, 4, 7, 5);
+    g.generateTexture("seedbit", 8, 8);
+    g.clear();
     g.fillStyle(0xbfeaff, 1);
     g.fillCircle(4, 4, 3.6);
     g.generateTexture("mote_dew", 8, 8);
@@ -1058,6 +1080,21 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     g.fillStyle(0xfff6cf, 1); g.fillCircle(7, 7, 1.8);
     g.generateTexture("glow", 14, 14);
     g.destroy();
+
+    // Soil crumbs, three shapes so a burst does not read as a repeated stamp.
+    // Painted, not tinted: Phaser.CANVAS ignores setTint, and gold particles
+    // over a plant being pulled out is exactly the wrong sentence.
+    const crumbTex = this.ctex("crumbs", 36, 12, (c) => {
+      c.fillStyle = "#6b4a30";
+      ell(c, 6, 6, 4, 3); c.fill();
+      c.fillStyle = "#7d5a3c";
+      rr(c, 14, 3, 7, 6, 2.4); c.fill();
+      c.fillStyle = "#54402c";
+      ell(c, 30, 6, 3, 2.2); c.fill();
+      c.fillStyle = "rgba(255,255,255,0.14)";
+      ell(c, 5, 5, 1.6, 1.1); c.fill(); ell(c, 16.5, 4.6, 1.6, 1); c.fill();
+    });
+    for (let k = 0; k < 3; k++) crumbTex.add(`c${k}`, 0, k * 12, 0, 12, 12);
 
     // animations
     this.anims.create({ key: "idle", frames: [{ key: "g_idle_0" }], frameRate: 1, repeat: -1 });
@@ -1566,7 +1603,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     drawPlant(c, sp, { stage: plant.stage, wilted: plant.wilted, dead: plant.dead, variant: plant.variant });
     c.restore();
     node.tex.refresh();
-    node.img.setVisible(true);
+    // ...unless a ritual is holding a detached copy of it: a state load
+    // landing mid-beat would otherwise put the plant back in the bed while
+    // the gardener is carrying it away.
+    node.img.setVisible(!(this.ritualGhost && i === this.ritualPlot));
     this.syncVariantFx(i, plant.variant, plant.dead);
     this.syncDeadFx(i, plant.dead);
 
@@ -2103,6 +2143,20 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       emitting: false,
     }).setDepth(960);
 
+    // Earth thrown up by hands and a rake. Heavy gravity and a short life:
+    // crumbs fall back into the bed, they do not drift like celebration.
+    this.crumbs = this.add.particles(0, 0, "crumbs", {
+      frame: ["c0", "c1", "c2"],
+      speed: { min: 30, max: 110 },
+      angle: { min: 210, max: 330 },
+      scale: { min: 0.5, max: 1 },
+      alpha: { start: 1, end: 0.25 },
+      lifespan: { min: 320, max: 620 },
+      gravityY: 620,
+      rotate: { min: 0, max: 360 },
+      emitting: false,
+    }).setDepth(960);
+
     // One emitter per facing direction: the stream must arc *toward* the pond,
     // so speedX is mirrored rather than always-positive.
     const dropletCfg = (dir: 1 | -1) => ({
@@ -2188,14 +2242,18 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   }
 
   private updatePlayer() {
-    if (!this.player || this.pouring || this.celebrating || this.frozen) return;
+    // `scripted` is the scene walking him to a ritual; the player's own keys
+    // and taps are ignored for its duration, and a freeze does not stop it.
+    const scripted = this.ritualWalking;
+    if (!this.player || this.pouring || this.celebrating || this.ritualing) return;
+    if (this.frozen && !scripted) return;
 
     let vx = 0;
     let vy = 0;
-    const left = this.cursors?.left?.isDown || this.keys?.A?.isDown;
-    const right = this.cursors?.right?.isDown || this.keys?.D?.isDown;
-    const up = this.cursors?.up?.isDown || this.keys?.W?.isDown;
-    const down = this.cursors?.down?.isDown || this.keys?.S?.isDown;
+    const left = !scripted && (this.cursors?.left?.isDown || this.keys?.A?.isDown);
+    const right = !scripted && (this.cursors?.right?.isDown || this.keys?.D?.isDown);
+    const up = !scripted && (this.cursors?.up?.isDown || this.keys?.W?.isDown);
+    const down = !scripted && (this.cursors?.down?.isDown || this.keys?.S?.isDown);
 
     if (left || right || up || down) {
       this.autoTarget = null;
@@ -2211,6 +2269,11 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         if (this.pendingPour) {
           this.pendingPour = false;
           this.startPour();
+        }
+        if (this.pendingRitual) {
+          const go = this.pendingRitual;
+          this.pendingRitual = null;
+          go();
         }
       } else {
         vx = dx;
@@ -2276,7 +2339,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       .setDepth(YARD + this.player.y - 0.6)
       .setScale((0.52 + t * 0.16), (0.34 + t * 0.11));
 
-    if (this.keys && (Phaser.Input.Keyboard.JustDown(this.keys.E) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE))) {
+    if (!scripted && this.keys && (Phaser.Input.Keyboard.JustDown(this.keys.E) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE))) {
       this.requestTend(this.selected, "water");
     }
 
@@ -2562,6 +2625,340 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     // to remove. Nothing positive marks a plant being harmed.
   }
 
+  // ================= the hands-on rituals =================
+  //
+  // Clearing, gathering and sowing all share one shape: walk over, kneel,
+  // do the work with your hands, stand up. That is deliberate — it is the
+  // same gardener and the same soil every time, so the beats have to rhyme.
+  // What differs is the vocabulary. Clearing descends and never sparkles;
+  // gathering rises and may; sowing is small, dry and ends on a promise.
+  //
+  // Every beat is scheduled in wall-clock milliseconds, never frame counts:
+  // headless Chromium renders around 8fps, where a single frame is 125ms and
+  // a "3-frame hold" becomes a third of a second.
+
+  setReducedMotion(v: boolean) {
+    this.reducedMotion = v;
+  }
+
+  ritual(i: number, kind: RitualKind, done: () => void) {
+    if (!this.player || this.celebrating) { done(); return; }
+    // never two at once — the second one wins, the first resolves anyway
+    if (this.ritualing || this.ritualDone) this.finishRitual();
+
+    this.ritualDone = done;
+    this.ritualPlot = i;
+    this.selected = i;
+    this.refreshMarkers();
+
+    const begin = () => {
+      this.ritualWalking = false;
+      this.ritualing = true;
+      const p = PLOTS[i] ?? PLOTS[0];
+      this.player.setFlipX(this.player.x > p.x);
+      this.player.anims.stop();
+      if (this.reducedMotion) { this.quietRitual(i, kind); return; }
+      if (kind === "clear") this.beatsClear(i);
+      else if (kind === "harvest") this.beatsHarvest(i);
+      else this.beatsSow(i);
+    };
+
+    const stand = this.standPointFor(i);
+    if (Math.hypot(this.player.x - stand.x, this.player.y - stand.y) < 16) {
+      this.player.setPosition(stand.x, stand.y);
+      begin();
+    } else {
+      this.autoTarget = stand;
+      this.pendingRitual = begin;
+      this.ritualWalking = true;
+    }
+  }
+
+  /** The request failed after all — put the plant back, drop the beats. */
+  cancelRitual() {
+    const i = this.ritualPlot;
+    this.finishRitual();
+    if (i >= 0) this.refreshPlot(i);
+  }
+
+  /** A ritual timer, tracked so an interruption can take them all down. */
+  private rt(ms: number, fn: () => void) {
+    this.ritualTimers.push(this.time.delayedCall(ms, fn));
+  }
+
+  private finishRitual() {
+    this.ritualTimers.forEach((t) => t.remove(false));
+    this.ritualTimers = [];
+    if (this.ritualGhost) {
+      this.tweens.killTweensOf(this.ritualGhost);
+      this.ritualGhost.destroy();
+      this.ritualGhost = null;
+    }
+    this.ritualing = false;
+    this.ritualWalking = false;
+    this.pendingRitual = null;
+    this.ritualPlot = -1;
+    if (this.player) { this.player.setTexture("g_idle_0"); this.player.play("idle"); }
+    const done = this.ritualDone;
+    this.ritualDone = null;
+    done?.();
+  }
+
+  /**
+   * A detached copy of the plant, so the beats have something to hold while
+   * the real one is repainted out from under them by the arriving state.
+   */
+  private takeGhost(i: number): Phaser.GameObjects.Image | null {
+    const node = this.plotNodes[i];
+    const plant = this.plotState(i)?.plant;
+    const sp = plant ? SPECIES_BY_KEY[plant.species] : undefined;
+    if (!node || !plant || !sp) return null;
+    this.ctex("plantghost", PB_W * 2, PB_H * 2, (c) => {
+      c.scale(2, 2);
+      c.translate(PB_X, PB_Y);
+      drawPlant(c, sp, { stage: plant.stage, wilted: plant.wilted, dead: plant.dead, variant: plant.variant });
+    });
+    const p = PLOTS[i] ?? PLOTS[0];
+    const ghost = this.add
+      .image(p.x, p.y, "plantghost")
+      .setScale(0.5)
+      .setOrigin(PB_X / PB_W, PB_Y / PB_H)
+      .setDepth(YARD + p.y + 0.3)
+      .setAngle(node.img.angle);
+    node.img.setVisible(false);
+    this.ritualGhost = ghost;
+    return ghost;
+  }
+
+  /**
+   * Loose earth lifting and falling back. Drawn at the origin of a Graphics
+   * placed AT the plot, so scaling it spreads the puff instead of flinging
+   * it across the yard — a Graphics scales about its own position, and one
+   * drawn at absolute world coords travels when you scale it.
+   */
+  private soilPuff(x: number, y: number, k = 1) {
+    const puff = this.add.graphics({ x, y: y + 3 }).setDepth(YARD + y - 0.6);
+    puff.fillStyle(0x6b4a30, 0.5);
+    puff.fillEllipse(0, 0, 54 * k, 16 * k);
+    this.tweens.add({
+      targets: puff, scaleX: 1.9, scaleY: 0.5, alpha: 0,
+      duration: 620, ease: "Cubic.easeOut", onComplete: () => puff.destroy(),
+    });
+  }
+
+  /** A ring opening on the soil, in whatever colour the moment earned. */
+  private soilRing(x: number, y: number, colour: number, alpha: number, ms: number) {
+    const ring = this.add.graphics({ x, y: y + 4 }).setDepth(YARD + y - 0.5);
+    ring.lineStyle(2.5, colour, alpha);
+    ring.strokeEllipse(0, 0, 40, 15);
+    this.tweens.add({
+      targets: ring, scaleX: 1.5, scaleY: 1.5, alpha: 0,
+      duration: ms, ease: "Sine.easeOut", onComplete: () => ring.destroy(),
+    });
+  }
+
+  /**
+   * Pulling a dead plant out of the ground. Six beats, 1390ms.
+   *
+   * No camera move and no ghostly silhouette of what it used to be: the
+   * mourning is already paid for by the card that sent the player here, and
+   * a second helping of grief over the same plant is maudlin. This beat's
+   * job is continuity — the thing was there, hands took it away, the bed is
+   * level now.
+   */
+  private beatsClear(i: number) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    const ghost = this.takeGhost(i);
+
+    // 1. TAKE HOLD (140ms)
+    this.player.setTexture("g_kneel_0");
+    sfx.take();
+    if (ghost) {
+      this.tweens.add({ targets: ghost, angle: ghost.angle + 3, duration: 140, ease: "Sine.easeOut" });
+    }
+
+    // 2. KNEEL (200ms) — the earth loosens before anything moves
+    this.rt(140, () => { this.soilPuff(p.x, p.y, 0.55); this.crumbs.explode(5, p.x, p.y + 2); });
+
+    // 3. DRAW UP (180ms) — the pull, and the roots complaining about it
+    this.rt(340, () => {
+      this.player.setTexture("g_kneel_1");
+      sfx.uproot();
+      if (ghost) {
+        this.tweens.add({ targets: ghost, y: p.y - 7, scaleY: 0.53, duration: 180, ease: "Sine.easeIn" });
+      }
+      this.crumbs.explode(7, p.x, p.y + 2);
+    });
+
+    // 4. THE BREAK (90ms) — the shortest beat, because it is the loudest
+    this.rt(520, () => {
+      sfx.snap();
+      this.crumbs.explode(14, p.x, p.y);
+      this.cameraPunch(0.008);
+      if (ghost) this.tweens.add({ targets: ghost, y: p.y - 13, duration: 90, ease: "Quad.easeOut" });
+    });
+
+    // 5. LIFT AWAY (260ms) — out of frame sideways, never up into the light
+    this.rt(610, () => {
+      const away = this.player.flipX ? -1 : 1;
+      if (ghost) {
+        this.tweens.add({
+          targets: ghost,
+          y: p.y - 40, x: p.x + away * 30,
+          angle: ghost.angle + away * 26,
+          scaleX: 0.44, scaleY: 0.44, alpha: 0,
+          duration: 260, ease: "Sine.easeIn",
+        });
+      }
+      // the fallen leaves and the dull ring go with it
+      this.deadFx[i]?.objs.forEach((o) =>
+        this.tweens.add({ targets: o, alpha: 0, duration: 300 })
+      );
+    });
+
+    // 6. RAKE (240ms) — level the bed
+    this.rt(870, () => {
+      this.player.setTexture("g_rake_0");
+      sfx.rake();
+      this.rt(120, () => this.player?.setTexture("g_rake_1"));
+      const sweep = this.add.graphics({ x: p.x, y: p.y + 4 }).setDepth(YARD + p.y - 0.55);
+      sweep.fillStyle(0x6b4a30, 0.42);
+      sweep.fillEllipse(0, 0, 30, 11);
+      this.tweens.add({
+        targets: sweep, scaleX: 2.1, scaleY: 1.25, alpha: 0,
+        duration: 320, ease: "Cubic.easeOut", onComplete: () => sweep.destroy(),
+      });
+      this.crumbs.explode(6, p.x + 12, p.y + 2);
+    });
+
+    // 7. BED READY (440ms) — he stands, the soil settles, and nothing
+    // congratulates him. Every other cue in this game is a small fanfare;
+    // there is no closing sound here on purpose.
+    this.rt(1110, () => {
+      this.player.setTexture("g_idle_0");
+      this.soilRing(p.x, p.y, 0x9c8465, 0.6, 440);
+    });
+
+    this.rt(1390, () => this.finishRitual());
+  }
+
+  /**
+   * Gathering a bloom. Same hands, same kneel — but this one is a win, so
+   * it is allowed to rise and to sparkle, and the flower leaves upward.
+   */
+  private beatsHarvest(i: number) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    const ghost = this.takeGhost(i);
+
+    this.player.setTexture("g_kneel_0");
+    sfx.take();
+
+    // cup it — the bloom leans into the hand
+    this.rt(180, () => {
+      if (ghost) {
+        this.tweens.add({
+          targets: ghost, scaleX: 0.515, scaleY: 0.515, angle: ghost.angle - 2,
+          duration: 220, ease: "Sine.easeOut",
+        });
+      }
+    });
+
+    // snip
+    this.rt(420, () => {
+      this.player.setTexture("g_kneel_1");
+      sfx.snip();
+      this.sparkles.explode(10, p.x, p.y - 40);
+    });
+
+    // lift away, upward, trailing light
+    this.rt(560, () => {
+      if (ghost) {
+        this.tweens.add({
+          targets: ghost, y: p.y - 96, scaleX: 0.3, scaleY: 0.3, alpha: 0,
+          duration: 420, ease: "Sine.easeOut",
+        });
+      }
+      this.sparkles.explode(18, p.x, p.y - 56);
+      this.rt(200, () => this.sparkles.explode(12, p.x, p.y - 86));
+    });
+
+    // stand, and leave the bed warm
+    this.rt(900, () => {
+      this.player.setTexture("g_idle_0");
+      this.soilRing(p.x, p.y, 0xffd76e, 0.7, 420);
+      sfx.sprout();
+    });
+
+    this.rt(1240, () => this.finishRitual());
+  }
+
+  /**
+   * Sowing. The plant itself arrives with the state a moment later, so the
+   * last beat opens a ring over the spot it lands in — the pop-in reads as
+   * the seed taking rather than as a sprite appearing.
+   */
+  private beatsSow(i: number) {
+    const p = PLOTS[i] ?? PLOTS[0];
+
+    this.player.setTexture("g_kneel_0");
+    sfx.take();
+
+    // dig a hole
+    this.rt(170, () => {
+      sfx.press();
+      this.soilPuff(p.x, p.y, 0.5);
+      this.crumbs.explode(9, p.x, p.y + 2);
+    });
+
+    // the seed goes in
+    this.rt(430, () => {
+      const away = this.player.flipX ? -1 : 1;
+      const seed = this.add
+        .image(p.x + away * 16, p.y - 26, "seedbit")
+        .setScale(0.9).setDepth(YARD + p.y + 0.4);
+      this.ritualGhost?.destroy();
+      sfx.press();
+      this.tweens.add({
+        targets: seed, x: p.x, y: p.y + 2, scaleX: 0.5, scaleY: 0.5, alpha: 0,
+        duration: 240, ease: "Quad.easeIn", onComplete: () => seed.destroy(),
+      });
+    });
+
+    // pat the earth down over it, twice
+    this.rt(660, () => {
+      this.player.setTexture("g_kneel_1");
+      sfx.pat();
+      this.crumbs.explode(4, p.x, p.y + 2);
+      this.rt(130, () => { this.player?.setTexture("g_kneel_0"); this.crumbs.explode(4, p.x, p.y + 2); });
+    });
+
+    // stand up — the one place an elastic ease belongs in these beats
+    this.rt(940, () => {
+      this.player.setTexture("g_idle_0");
+      sfx.sprout();
+      this.soilRing(p.x, p.y, 0x8fe08a, 0.75, 420);
+      this.sparkles.explode(10, p.x, p.y - 12);
+    });
+
+    this.rt(1250, () => this.finishRitual());
+  }
+
+  /**
+   * `prefers-reduced-motion`: the fact still has to land, so it is the same
+   * event with the travel taken out — one fade, one sound, no kneeling.
+   */
+  private quietRitual(i: number, kind: RitualKind) {
+    const p = PLOTS[i] ?? PLOTS[0];
+    if (kind === "sow") {
+      sfx.sprout();
+    } else {
+      const ghost = this.takeGhost(i);
+      if (kind === "clear") sfx.uproot(); else sfx.snip();
+      if (ghost) this.tweens.add({ targets: ghost, alpha: 0, duration: 220 });
+    }
+    this.rt(280, () => this.finishRitual());
+  }
+
   /**
    * A new stage is a week of somebody's life, so it gets a real beat: soil
    * lifts, the plant springs taller than it will settle, a green ring opens
@@ -2574,13 +2971,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     const p = PLOTS[i] ?? PLOTS[0];
 
     // soil kicked up at the base
-    const puff = this.add.graphics().setDepth(YARD + p.y - 0.6);
-    puff.fillStyle(0x6b4a30, 0.5);
-    puff.fillEllipse(p.x, p.y + 3, 54, 16);
-    this.tweens.add({
-      targets: puff, scaleX: 1.9, scaleY: 0.5, alpha: 0,
-      duration: 620, ease: "Cubic.easeOut", onComplete: () => puff.destroy(),
-    });
+    this.soilPuff(p.x, p.y);
 
     // the growth spring — overshoot well past the resting size, then settle
     this.tweens.killTweensOf(img);

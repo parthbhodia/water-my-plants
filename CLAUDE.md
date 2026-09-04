@@ -220,6 +220,44 @@ Anchor everything to `plantHeightPx(form, stage)`. A lily pad and a
 sunflower differ threefold in height; a fixed offset leaves the dressing
 hanging in the sky above the short ones.
 
+## The hands-on rituals
+
+Clearing a bed, gathering a bloom and sowing a seed are not state changes
+with a toast on top — the gardener walks over, kneels, and does them.
+`ritual(plotIdx, kind, done)` on the scene (via `bridge.ritual(kind, i)`,
+which returns a promise) owns all three, and they deliberately share one
+shape — walk, kneel, work, stand — so the garden reads as one place with one
+pair of hands in it.
+
+- **The vocabularies must not blur.** Clearing *descends* — 196 → 131/98 →
+  88 → 58 Hz, the exact inverse of `comboSplash`'s semitone climb — the
+  plant leaves sideways and out of frame, and there is **no closing sound at
+  all**, because every other cue in the game is a rising major-key fanfare
+  and playing one over a plant being pulled out congratulates the player for
+  a loss. Gathering is a win: it rises, sparkles, and the bloom leaves
+  upward. Sowing is small and dry and ends on a promise.
+- **The mourning is already paid for** by `GonePlantModal`. The scene beat's
+  job is continuity — it was there, hands took it away, the bed is level now
+  — not a second helping of grief. Hence no camera move and no ghostly
+  silhouette of what used to be growing there.
+- **Beats are scheduled in wall-clock ms, never frame counts.** Headless
+  Chromium renders at ~8fps, where one frame is 125ms.
+- **The beats run alongside the request, never in front of it.** They
+  decorate a fact the server has already committed, so a slow network shows
+  a longer kneel, not a stalled button — and `bridge.ritual` always
+  resolves, through a watchdog if it has to. A failed RPC calls
+  `cancelRitual()`, which puts the plant back.
+- The plant the gardener carries is a **detached ghost** (`takeGhost`), so
+  state arriving mid-beat repaints the bed without yanking it out of his
+  hands. `refreshPlot` knows to leave the real sprite hidden while a ghost
+  is out.
+- `prefers-reduced-motion` collapses all three to one fade plus the sound.
+  The fact still lands; only the travel goes.
+- A Graphics scales about its **own position**, so anything drawn at
+  absolute world coordinates flies across the yard when you scale it. Place
+  the Graphics at the plot and draw at its origin — that is what `soilPuff`
+  and `soilRing` do.
+
 ## Reward beats: every act of care lands
 
 Nothing a player earns may happen silently.

@@ -286,6 +286,17 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     };
   }, [bridge, state]);
 
+  // The rituals are the only motion in the scene long enough to bother
+  // somebody who asked the OS for less of it, so they are the only ones that
+  // check. It is a live query: the setting can change mid-session.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => bridge.setReducedMotion(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, [bridge]);
+
   // The gardener should not wander behind an open modal.
   useEffect(() => {
     bridge.setFrozen(tutorial || seedFor !== null || journalOpen || goneFor !== null);
@@ -443,50 +454,83 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const plantSeed = useCallback(
     async (key: string) => {
       if (!seedFor) return;
+      const idx = seedFor.idx;
       setBusy(true);
-      const { data, error } = await supabase.rpc("plant_seed", {
-        p_plot_idx: seedFor.idx,
-        p_species: key,
-      });
-      setBusy(false);
       setSeedFor(null);
-      if (error) {
-        showToast(error.message);
+      const beats = bridge.ritual("sow", idx);
+      let data: unknown;
+      try {
+        const res = await supabase.rpc("plant_seed", { p_plot_idx: idx, p_species: key });
+        if (res.error) {
+          bridge.cancelRitual();
+          showToast(res.error.message);
+          return;
+        }
+        data = res.data;
+        await beats;
+      } catch {
+        bridge.cancelRitual();
+        showToast("Couldn't reach the garden — try that again.");
         return;
+      } finally {
+        setBusy(false);
       }
-      const wasFirstSeed = !state?.plots.some((p) => p.plant);
+      const wasFirstSeed = !stateRef.current?.plots.some((p) => p.plant);
       applyState(data as GardenState);
-      sfx.grow();
       let guide = false;
       try { guide = wasFirstSeed && !window.localStorage.getItem("lily-guided-done"); } catch {}
       if (guide) {
-        setSelected(seedFor.idx);
-        bridge.select(seedFor.idx);
-        bridge.focusPlot(seedFor.idx);
+        setSelected(idx);
+        bridge.select(idx);
+        bridge.focusPlot(idx);
         setGuided("water");
         showToast("There she is! Now the first drink — press Water. 💧", 12000, "cheer");
       } else {
         showToast("Planted! Keep to its schedule and it will thrive. 🌱");
       }
     },
-    [supabase, seedFor, applyState, showToast, state, bridge]
+    [supabase, seedFor, applyState, showToast, bridge]
   );
 
+  /**
+   * Clearing a bed and gathering a bloom are the same RPC and two different
+   * events, so they get two different rituals — the gardener pulls a dead
+   * plant out sideways and lifts a finished one up into the light.
+   *
+   * The beats run ALONGSIDE the request, never in front of it: a slow
+   * network then shows a longer kneel rather than a stalled button, and the
+   * animation can never be the thing that keeps the player waiting, because
+   * it decorates a fact the server has already committed. `finally` clears
+   * the lock whatever happens on the way.
+   */
   const clearPlot = useCallback(
     async (i: number) => {
       if (busy) return;
+      const bloomed = !!stateRef.current?.plots[i]?.plant?.isBloomed;
       setBusy(true);
-      const { data, error } = await supabase.rpc("clear_plot", { p_plot_idx: i });
-      setBusy(false);
-      if (error) {
-        showToast(error.message);
-        return;
+      const beats = bridge.ritual(bloomed ? "harvest" : "clear", i);
+      try {
+        const { data, error } = await supabase.rpc("clear_plot", { p_plot_idx: i });
+        if (error) {
+          bridge.cancelRitual();
+          showToast(error.message);
+          return;
+        }
+        await beats;
+        applyState(data as GardenState);
+        showToast(
+          bloomed
+            ? "Gathered, and the bed is ready again. 🌼"
+            : "Cleared. The bed is level and ready for a new seed. 🌱"
+        );
+      } catch {
+        bridge.cancelRitual();
+        showToast("Couldn't reach the garden — try that again.");
+      } finally {
+        setBusy(false);
       }
-      applyState(data as GardenState);
-      sfx.click();
-      showToast("Plot cleared and ready for a new seed. 🌱");
     },
-    [supabase, applyState, showToast, busy]
+    [supabase, applyState, showToast, busy, bridge]
   );
 
   const revivePlot = useCallback(

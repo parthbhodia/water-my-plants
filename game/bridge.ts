@@ -1,6 +1,12 @@
 import type { GardenState, TendAction, TendResult } from "@/lib/types";
 import type { Avatar } from "./avatar";
 
+/**
+ * The hands-on beats. All three share one shape — walk over, kneel, work,
+ * stand — so the garden reads as one place with one pair of hands in it.
+ */
+export type RitualKind = "clear" | "harvest" | "sow";
+
 // Thin, framework-free bridge between React (state, network) and the Phaser scene.
 export interface SceneApi {
   setGarden(s: GardenState): void;
@@ -13,6 +19,9 @@ export interface SceneApi {
   setBottomInset(px: number): void;
   celebrateRound(count: number): void;
   celebrateLevel(level: number): void;
+  ritual(plotIdx: number, kind: RitualKind, done: () => void): void;
+  cancelRitual(): void;
+  setReducedMotion(v: boolean): void;
   setCombo(n: number): void;
   releaseFocus(): void;
 }
@@ -23,6 +32,7 @@ export class GameBridge {
   private pendingAvatar: Avatar | null = null;
   private frozen = false;
   private inset = 0;
+  private reduced = false;
 
   /** React sets these */
   onPourStart: ((plotIdx: number, action: TendAction) => void) | null = null;
@@ -38,6 +48,7 @@ export class GameBridge {
     if (this.pendingState) api.setGarden(this.pendingState);
     if (this.frozen) api.setFrozen(true);
     if (this.inset) api.setBottomInset(this.inset);
+    if (this.reduced) api.setReducedMotion(true);
   }
 
   detach() {
@@ -93,6 +104,35 @@ export class GameBridge {
 
   releaseFocus() {
     this.sceneApi?.releaseFocus();
+  }
+
+  /**
+   * Play the gardener actually doing the thing, and resolve when the beats
+   * land. It ALWAYS resolves: the animation decorates a fact the server has
+   * already committed, so it may never be the thing that stops a player
+   * moving on — no scene, a boot failure or a hung tween all fall through
+   * the watchdog instead of leaving the button dead.
+   */
+  ritual(kind: RitualKind, plotIdx: number): Promise<void> {
+    const api = this.sceneApi;
+    if (!api) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      let settled = false;
+      const done = () => { if (!settled) { settled = true; resolve(); } };
+      setTimeout(done, 6000);
+      try { api.ritual(plotIdx, kind, done); } catch { done(); }
+    });
+  }
+
+  /** The request failed — put the plant back and drop the beats. */
+  cancelRitual() {
+    this.sceneApi?.cancelRitual();
+  }
+
+  /** Honour the OS "reduce motion" setting: the beats collapse to a fade. */
+  setReducedMotion(v: boolean) {
+    this.reduced = v;
+    this.sceneApi?.setReducedMotion(v);
   }
 
   /** Stops the gardener responding to keys/taps while a modal is open. */
