@@ -66,8 +66,12 @@ begin
      and not exists (select 1 from plants p join gardens g on g.id = p.garden_id
                       where g.user_id = v_uid and p.plot_idx = i and p.active)
    limit 1;
+  -- `phase is null` matters: a seasonal species is only plantable in its own
+  -- quarter of the year, so picking one here would make this test fail for
+  -- nine months out of twelve and say nothing true about the RPC.
   select key into v_sp from species
-   where (needs_plot = v_kind or needs_plot = 'any') and unlock_cost = 0 limit 1;
+   where (needs_plot = v_kind or needs_plot = 'any')
+     and unlock_cost = 0 and phase is null limit 1;
 
   if v_plot is not null and v_sp is not null then
     begin perform public.plant_seed(v_plot, v_sp); v_out := v_out || 'plant_seed=ok ';
@@ -175,6 +179,36 @@ begin
   begin perform public.visit_water(v_uid);
     v_out := v_out || 'visit_water=**FAIL:let a player visit themselves** '; procedure_failed := true;
   exception when others then v_out := v_out || 'visit_water=guard(ok) '; end;
+
+  -- The seasonal gate, checked against a species that is DEFINITELY out of
+  -- phase today whatever the date is: three of the four always are. The gate
+  -- sits BEFORE the plot-kind and occupancy checks in plant_seed, so plot 0
+  -- always reaches it — and the message is asserted, because "it threw" would
+  -- pass just as happily on "that plot is occupied" with the gate ripped out.
+  declare v_off text;
+  begin
+    select key into v_off from species
+     where phase is not null
+       and phase <> year_phase((select timezone from profiles where id = v_uid), current_date)
+     limit 1;
+    if v_off is null then
+      v_out := v_out || 'phase_gate=**FAIL:no out-of-phase species to test with** ';
+      procedure_failed := true;
+    else
+      begin
+        perform public.plant_seed(0::smallint, v_off);
+        v_out := v_out || 'phase_gate=**FAIL:planted ' || v_off || ' out of season** ';
+        procedure_failed := true;
+      exception when others then
+        if SQLERRM like '%goes in the ground in%' then
+          v_out := v_out || 'phase_gate=guard(ok) ';
+        else
+          v_out := v_out || 'phase_gate=**FAIL:refused for the wrong reason: ' || SQLERRM || '** ';
+          procedure_failed := true;
+        end if;
+      end;
+    end if;
+  end;
 
   raise exception 'TESTRESULT %: %',
     case when procedure_failed then '*** FAILURES ***' else 'ALL PASS' end, v_out;

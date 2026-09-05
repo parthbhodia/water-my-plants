@@ -387,7 +387,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.garden = s;
     // `today` is the server's date in the player's own frozen timezone, so
     // the yard turns over when their day does, not when the browser's does.
-    this.applyYearPhase(yearPhase(s.today, s.timezone));
+    // the server ships its own reading; the local rule is only a fallback
+    // for a state document that predates it
+    this.applyYearPhase(s.yearPhase ?? yearPhase(s.today, s.timezone));
     if (!prev) this.selected = s.plots.findIndex((p) => p.unlocked && p.plant) ?? 0;
     if (this.selected < 0) this.selected = 0;
     for (let i = 0; i < PLOTS.length; i++) this.refreshPlot(i);

@@ -126,7 +126,7 @@ export default function DevMobile() {
         </div>
       </div></div>
       {modal === "seed" && (
-        <SeedPicker plot={STATE.plots[2]} unlocked={STATE.unlockedSpecies} dewdrops={STATE.dewdrops}
+        <SeedPicker plot={STATE.plots[2]} unlocked={STATE.unlockedSpecies} dewdrops={STATE.dewdrops} phase="autumn"
           busy={false} onPlant={()=>setModal(null)} onClose={()=>setModal(null)} />
       )}
       {modal === "journal" && <Journal state={STATE} completed={[]} onClose={()=>setModal(null)} />}

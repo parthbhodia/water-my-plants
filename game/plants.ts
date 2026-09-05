@@ -497,6 +497,217 @@ function formTree(c: Ctx, p: Pal, t: number, stage: number) {
   }
 }
 
+// ============================================================
+// Seasonal forms. Each one only ever goes in the ground during its own
+// quarter of the year (the gate is server-side, in plant_seed), so they are
+// the four plants most players will see least — which is exactly why they
+// cannot be a recoloured sunflower. Each gets its own silhouette.
+// ============================================================
+
+/** Cherry blossom: a bare dark trunk, then the crown arrives all at once. */
+function formBlossom(c: Ctx, p: Pal, t: number, stage: number) {
+  const h = 30 + t * 60;
+  // trunk, forking near the top
+  c.strokeStyle = lg(c, 0, 0, 0, -h, [[0, "#5a4030"], [1, "#7d5a42"]]);
+  c.lineWidth = 7 - t * 2; c.lineCap = "round";
+  c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(-4, -h * 0.55, -1, -h); c.stroke();
+  const arms = 2 + Math.round(t * 2);
+  for (let i = 0; i < arms; i++) {
+    const dir = i % 2 === 0 ? -1 : 1;
+    const ay = -h * (0.55 + (i / arms) * 0.4);
+    c.lineWidth = 3.4 - t;
+    c.beginPath();
+    c.moveTo(0, ay);
+    c.quadraticCurveTo(dir * 14, ay - 8, dir * (16 + t * 12), ay - 16 - t * 8);
+    c.stroke();
+  }
+  if (stage < 4) return;
+
+  // the crown: overlapping clouds of blossom, opening wider each stage
+  const open = clamp01((stage - 3) / 3);
+  const r = 16 + open * 16;
+  const puff = (x: number, y: number, rr: number, lit: boolean) => {
+    c.fillStyle = rgrad(c, x - rr * 0.3, y - rr * 0.4, rr * 1.5,
+      [[0, lit ? "#fff2f7" : p.accent], [1, p.accent2]]);
+    ell(c, x, y, rr, rr * 0.86); c.fill();
+  };
+  c.save();
+  c.translate(0, -h - 6);
+  puff(-r * 0.8, 2, r * 0.72, false);
+  puff(r * 0.8, 0, r * 0.72, false);
+  puff(0, -r * 0.5, r * 0.9, true);
+  puff(-r * 0.35, r * 0.35, r * 0.62, true);
+  puff(r * 0.4, r * 0.4, r * 0.6, false);
+  // individual petals catching the light
+  c.fillStyle = "rgba(255,255,255,0.75)";
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 7) * Math.PI * 2;
+    ell(c, Math.cos(a) * r * 0.7, Math.sin(a) * r * 0.5 - 4, 2.6, 1.9); c.fill();
+  }
+  if (stage === 6) bloomFace(c, 0, 2, r * 0.3, "rgba(150,80,105,0.75)");
+  c.restore();
+
+  // a few petals already let go, resting on the soil
+  if (stage >= 5) {
+    c.fillStyle = p.accent2;
+    ell(c, -18, -2, 4, 2); c.fill();
+    ell(c, 14, -1, 3.4, 1.7); c.fill();
+    ell(c, 2, 1, 3, 1.6); c.fill();
+  }
+}
+
+/** Lavender: a fan of thin grey-green stems, each ending in a purple spike. */
+function formSpike(c: Ctx, p: Pal, t: number, stage: number) {
+  const n = 3 + Math.round(t * 4);
+  const h = 26 + t * 52;
+  for (let i = 0; i < n; i++) {
+    const spread = (i / (n - 1) - 0.5) * 2;      // -1..1
+    const lean = spread * (0.22 + t * 0.16);
+    const sh = h * (0.78 + 0.22 * (1 - Math.abs(spread)));
+    c.save();
+    c.rotate(lean);
+    c.strokeStyle = lg(c, 0, 0, 0, -sh, [[0, p.leafDark], [1, p.leaf]]);
+    c.lineWidth = 2.4; c.lineCap = "round";
+    c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -sh); c.stroke();
+    // narrow leaves low on the stem
+    c.strokeStyle = p.leafDark; c.lineWidth = 1.8;
+    c.beginPath(); c.moveTo(0, -sh * 0.22); c.lineTo(-5, -sh * 0.36); c.stroke();
+    c.beginPath(); c.moveTo(0, -sh * 0.3); c.lineTo(5, -sh * 0.44); c.stroke();
+
+    if (stage >= 3) {
+      // the flower spike: little whorls stacked up the top third
+      const beads = 4 + Math.round(t * 4);
+      const top = -sh;
+      for (let k = 0; k < beads; k++) {
+        const by = top + k * 4.4;
+        const bw = 3.2 - k * 0.16;
+        c.fillStyle = k % 2 ? p.accent : p.accent2;
+        ell(c, -1.6, by, bw, 2.1); c.fill();
+        ell(c, 1.6, by + 1.4, bw * 0.9, 1.9); c.fill();
+      }
+      if (stage === 6) {
+        c.fillStyle = "rgba(255,255,255,0.5)";
+        ell(c, 0, top + 2, 2, 1.4); c.fill();
+      }
+    }
+    c.restore();
+  }
+  if (stage === 6) bloomFace(c, 0, -h - 4, 5, "rgba(90,60,130,0.7)");
+}
+
+/** Pumpkin: a low sprawl of big lobed leaves with a gourd swelling at the base. */
+function formGourd(c: Ctx, p: Pal, t: number, stage: number) {
+  const reach = 20 + t * 26;
+  // trailing vine
+  c.strokeStyle = p.leafDark; c.lineWidth = 3; c.lineCap = "round";
+  c.beginPath();
+  c.moveTo(-reach * 0.9, -3);
+  c.quadraticCurveTo(0, -14 - t * 8, reach * 0.9, -3);
+  c.stroke();
+
+  const leaves = 3 + Math.round(t * 3);
+  for (let i = 0; i < leaves; i++) {
+    const f = i / (leaves - 1) - 0.5;
+    const lx = f * reach * 1.6;
+    const ly = -8 - Math.cos(f * Math.PI) * (10 + t * 12);
+    const lr = 9 + t * 7;
+    c.save();
+    c.translate(lx, ly);
+    c.rotate(f * 0.5);
+    // a lobed leaf: five bumps around a rough disc
+    c.fillStyle = rgrad(c, -lr * 0.3, -lr * 0.4, lr * 1.5, [[0, p.leaf], [1, p.leafDark]]);
+    c.beginPath();
+    for (let k = 0; k <= 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      const rr = lr * (k % 2 ? 0.74 : 1);
+      const px = Math.cos(a) * rr;
+      const py = Math.sin(a) * rr * 0.74;
+      if (k === 0) c.moveTo(px, py); else c.lineTo(px, py);
+    }
+    c.closePath(); c.fill();
+    c.strokeStyle = "rgba(255,255,255,0.2)"; c.lineWidth = 1;
+    for (let k = 0; k < 3; k++) {
+      const a = -0.7 + k * 0.7;
+      c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.cos(a) * lr * 0.8, Math.sin(a) * lr * 0.6); c.stroke();
+    }
+    c.restore();
+  }
+
+  if (stage >= 4) {
+    // the gourd itself, swelling and ribbed
+    const g = 6 + (stage - 3) * 4.6;
+    c.save();
+    c.translate(2, -g * 0.72);
+    c.fillStyle = rgrad(c, -g * 0.35, -g * 0.4, g * 1.7, [[0, p.accent], [1, p.accent2]]);
+    ell(c, 0, 0, g * 1.18, g); c.fill();
+    c.strokeStyle = "rgba(150,70,20,0.35)"; c.lineWidth = 1.4;
+    for (const rx of [-0.62, 0, 0.62]) {
+      c.beginPath();
+      c.ellipse(g * rx * 0.6, 0, g * 0.32, g * 0.98, 0, 0, Math.PI * 2);
+      c.stroke();
+    }
+    c.fillStyle = "#5f7a3a";
+    rr(c, -2, -g - 4, 4, 6, 1.6); c.fill();
+    c.fillStyle = "rgba(255,240,200,0.3)";
+    ell(c, -g * 0.4, -g * 0.42, g * 0.28, g * 0.2); c.fill();
+    if (stage === 6) bloomFace(c, 0, 1, g * 0.42, "rgba(120,55,10,0.8)");
+    c.restore();
+  }
+}
+
+/** Snowdrop: slender stems, each hanging one white bell. */
+function formBell(c: Ctx, p: Pal, t: number, stage: number) {
+  const n = 2 + Math.round(t * 3);
+  const h = 20 + t * 32;
+  // strappy leaves from the base
+  for (const dir of [-1, 1]) {
+    c.strokeStyle = lg(c, 0, 0, 0, -h, [[0, p.leafDark], [1, p.leaf]]);
+    c.lineWidth = 3.4; c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(dir * 2, 0);
+    c.quadraticCurveTo(dir * 9, -h * 0.55, dir * 5, -h * 0.92);
+    c.stroke();
+  }
+  for (let i = 0; i < n; i++) {
+    const spread = n === 1 ? 0 : i / (n - 1) - 0.5;
+    const sh = h * (0.85 + 0.15 * (1 - Math.abs(spread * 2)));
+    c.save();
+    c.rotate(spread * 0.34);
+    c.strokeStyle = p.leaf; c.lineWidth = 2; c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(0, 0);
+    c.quadraticCurveTo(0, -sh * 0.7, spread * 4, -sh);
+    c.stroke();
+    if (stage >= 3) {
+      // the nodding bell, hanging from the crook
+      const open = clamp01((stage - 2) / 4);
+      const bw = 4 + open * 3.2;
+      const bh = 6 + open * 6;
+      c.save();
+      c.translate(spread * 4, -sh + 1);
+      // the little green ovary at the top
+      c.fillStyle = p.leafDark;
+      ell(c, 0, 0, 2, 1.6); c.fill();
+      c.fillStyle = rgrad(c, -bw * 0.3, 1, bh * 1.6, [[0, "#ffffff"], [1, p.accent2]]);
+      c.beginPath();
+      c.moveTo(-bw, 1);
+      c.quadraticCurveTo(-bw * 1.05, bh * 0.8, 0, bh);
+      c.quadraticCurveTo(bw * 1.05, bh * 0.8, bw, 1);
+      c.closePath(); c.fill();
+      // a white flower on a pale winter ground needs an edge or it vanishes
+      c.strokeStyle = "rgba(110,145,130,0.55)"; c.lineWidth = 0.9; c.stroke();
+      if (stage >= 5) {
+        // outer petals part to show the green-tipped inner ones
+        c.fillStyle = p.accent;
+        ell(c, 0, bh * 0.62, bw * 0.42, bh * 0.3); c.fill();
+      }
+      c.restore();
+    }
+    c.restore();
+  }
+  if (stage === 6) bloomFace(c, 0, -h - 2, 5, "rgba(90,120,110,0.75)");
+}
+
 const FORMS: Record<PlantForm, (c: Ctx, p: Pal, t: number, stage: number) => void> = {
   pad: formPad,
   tall: formTall,
@@ -506,6 +717,10 @@ const FORMS: Record<PlantForm, (c: Ctx, p: Pal, t: number, stage: number) => voi
   bush: formBush,
   orchid: formOrchid,
   tree: formTree,
+  blossom: formBlossom,
+  spike: formSpike,
+  gourd: formGourd,
+  bell: formBell,
 };
 
 /**
@@ -629,6 +844,7 @@ export function drawPlant(c: Ctx, sp: SpeciesDef, look: PlantLook) {
 const NOMINAL_HEIGHT: Record<PlantForm, number> = {
   pad: 62, tall: 150, frond: 88, succulent: 82,
   vine: 108, bush: 78, orchid: 98, tree: 92,
+  blossom: 118, spike: 96, gourd: 64, bell: 62,
 };
 
 /**

@@ -13,6 +13,28 @@ export type PlantFact = {
 };
 
 export const PLANT_FACTS: Record<string, PlantFact> = {
+  // ---- seasonal ----
+  blossom: {
+    why: "She spends the whole year building buds and then spends them all in a week. Prune her once while she is bare — cut into blossom wood and you have thrown the season away.",
+    didYouKnow: "Cherry blossom opens on accumulated warmth, not on a date: the tree counts the hours above about 5°C since winter. That is why a mild February brings the whole country forward at once.",
+    tooMuch: "She is a tree, not a pot plant. Give her time to drink what she has.",
+  },
+  lavender: {
+    why: "She is a Mediterranean hillside plant — thin, stony, dry soil. Every three days is generous, and wet feet rot her faster than any drought.",
+    didYouKnow: "The scent is a defence. Those oils deter grazing animals and slow fungus, which is exactly why they also keep moths out of a wardrobe.",
+    tooMuch: "Root rot. She would rather be forgotten than fussed over — wait until she asks.",
+  },
+  pumpkin: {
+    why: "She is building something enormous out of nothing but water and light, so she wants a drink every day and three good feeds. Skip either and the fruit stalls where it is.",
+    didYouKnow: "A pumpkin can put on 20kg in a single week at its peak, and the whole fruit is filled by a single vine — the record holders are hand-fed like prize animals.",
+    tooMuch: "Not the worst thing, but split skins come from a sudden soaking after a dry spell. Steady beats generous.",
+  },
+  snowdrop: {
+    why: "She flowers in the cold on purpose, while nothing is competing for the light or the bees. Shade suits her; she has finished before the trees come into leaf.",
+    didYouKnow: "Snowdrops make their own heat — the plant can be several degrees warmer than the air, which is how a green shoot pushes up through frozen ground.",
+    tooMuch: "Cold, wet ground and a bulb do not mix. Let her be.",
+  },
+
   lily: {
     // "She is never really thirsty" was a shrug, not an answer — and it left
     // the daily visit looking pointless while the button still said Water.

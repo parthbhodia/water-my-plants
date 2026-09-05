@@ -271,7 +271,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       // The garden turns over with the year on its own; Granny only mentions
       // it the first time a player sees the new one, and never on a first
       // ever visit, when there is nothing to have changed from.
-      const phase = yearPhase(s.today, s.timezone);
+      const phase = s.yearPhase ?? yearPhase(s.today, s.timezone);
       music.suggestMode(PHASE_MUSIC[phase]);
       try {
         const seen = window.localStorage.getItem("lily-year-phase");
@@ -853,6 +853,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           plot={seedFor}
           unlocked={state.unlockedSpecies}
           dewdrops={state.dewdrops}
+          phase={state.yearPhase ?? yearPhase(state.today, state.timezone)}
           busy={busy}
           onPlant={plantSeed}
           onClose={() => setSeedFor(null)}

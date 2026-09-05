@@ -3,6 +3,7 @@
 import { SPECIES, careSummary, PLOT_LABEL } from "@/lib/species";
 import type { CompletedLily, GardenState } from "@/lib/types";
 import PlantIcon from "./PlantIcon";
+import { PHASE_NAME, yearPhase } from "@/lib/yearphase";
 import VariantCollection from "./VariantCollection";
 
 export default function Journal({
@@ -14,6 +15,7 @@ export default function Journal({
   completed: CompletedLily[] | null;
   onClose: () => void;
 }) {
+  const phase = state.yearPhase ?? yearPhase(state.today, state.timezone);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="journal" onClick={(e) => e.stopPropagation()}>
@@ -22,21 +24,34 @@ export default function Journal({
           <button className="btn ghost small" onClick={onClose}>✕ close</button>
         </div>
         <p className="journal-sub">
-          Every species and what it asks of you. Locked entries arrive with the Shop.
+          Every species and what it asks of you. Locked entries arrive with the
+          Shop; the four seasonal ones come round with the year.
         </p>
 
         <div className="journal-grid">
           {SPECIES.map((s) => {
-            const unlocked = state.unlockedSpecies.includes(s.key);
+            // A seasonal species is never bought, so "Unlock for 0 dewdrops"
+            // would be nonsense. Out of season it is simply waiting, and the
+            // almanac says so — this is the one place a player can see the
+            // whole year's planting at once.
+            const seasonal = !!s.phase;
+            const here = !s.phase || s.phase === phase;
+            const unlocked = state.unlockedSpecies.includes(s.key) || (seasonal && !here);
             return (
-              <div key={s.key} className={`stage-card ${unlocked ? "" : "locked"}`}>
+              <div key={s.key} className={`stage-card ${unlocked && here ? "" : "locked"}`}>
                 <span className="stage-num">{s.points} pts</span>
                 <div className="art">
                   <PlantIcon species={s} stage={6} size={72} />
                 </div>
                 <h4>{s.name}</h4>
                 <p className="seed-care">{careSummary(s)}</p>
-                <p>{unlocked ? s.blurb : `Unlock for ${s.unlockCost} dewdrops.`}</p>
+                <p>
+                  {seasonal && !here
+                    ? `${s.blurb} Back in ${PHASE_NAME[s.phase!]}.`
+                    : unlocked
+                    ? s.blurb
+                    : `Unlock for ${s.unlockCost} dewdrops.`}
+                </p>
                 <p className="seed-care">Matures in {s.maturesDays} days · {PLOT_LABEL[s.needsPlot]}</p>
               </div>
             );

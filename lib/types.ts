@@ -1,3 +1,4 @@
+import type { YearPhase } from "./yearphase";
 import type { Avatar } from "@/game/avatar";
 
 export type PlantState = {
@@ -58,7 +59,14 @@ export type GardenState = {
   hour: number;
   timezone: string;
   plots: PlotState[];
+  /**
+   * What may go in the ground TODAY. A seasonal species is simply absent
+   * outside its phase — the server decides, so no client can offer a seed
+   * that `plant_seed` is about to refuse.
+   */
   unlockedSpecies: string[];
+  /** The server's own reading of the turn of the year, so the UI agrees with it. */
+  yearPhase?: YearPhase;
   inventory: Record<string, number>;
   decor: Record<string, string>;
   level: number;

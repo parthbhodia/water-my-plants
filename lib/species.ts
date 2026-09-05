@@ -1,8 +1,13 @@
+import type { YearPhase } from "./yearphase";
+
 // Client mirror of the `species` table. The database stays the authority for
 // validation; this carries only what the UI and renderer need.
 
 export type PlotKind = "any" | "sun" | "shade" | "water";
-export type PlantForm = "pad" | "tall" | "frond" | "succulent" | "vine" | "bush" | "orchid" | "tree";
+export type PlantForm =
+  | "pad" | "tall" | "frond" | "succulent" | "vine" | "bush" | "orchid" | "tree"
+  // seasonal forms — each only plantable in its own phase of the year
+  | "blossom" | "spike" | "gourd" | "bell";
 
 export type SpeciesDef = {
   key: string;
@@ -19,6 +24,14 @@ export type SpeciesDef = {
   points: number;
   unlockCost: number;
   overwaterable: boolean;
+  /**
+   * The only phase of the year this can be PLANTED in, or null for all year.
+   * The gate is enforced server-side in `plant_seed`; this mirror is what
+   * lets the seed picker say "back in Spring" instead of throwing an error.
+   * Nothing already growing is ever affected — the phase is consulted once,
+   * when the seed goes in.
+   */
+  phase: YearPhase | null;
   /** leaf/stem, secondary, bloom — drives the painter */
   colors: { leaf: string; leafDark: string; accent: string; accent2: string };
 };
@@ -29,7 +42,7 @@ export const SPECIES: SpeciesDef[] = [
     blurb: "Floats in the pond and asks only that you show up.",
     cadenceDays: 1, windowStart: null, windowEnd: null, needsPlot: "water",
     feedsRequired: 0, prunesRequired: 0, maturesDays: 7, points: 10,
-    unlockCost: 0, overwaterable: false,
+    unlockCost: 0, overwaterable: false, phase: null,
     colors: { leaf: "#58b368", leafDark: "#3a8a4e", accent: "#f7a8c4", accent2: "#ee7fa9" },
   },
   {
@@ -37,7 +50,7 @@ export const SPECIES: SpeciesDef[] = [
     blurb: "Grows tall, but only drinks while the sun is up.",
     cadenceDays: 1, windowStart: 6, windowEnd: 20, needsPlot: "sun",
     feedsRequired: 0, prunesRequired: 0, maturesDays: 10, points: 18,
-    unlockCost: 0, overwaterable: false,
+    unlockCost: 0, overwaterable: false, phase: null,
     colors: { leaf: "#5faa4e", leafDark: "#3d7c39", accent: "#ffd23f", accent2: "#e8a11c" },
   },
   {
@@ -45,7 +58,7 @@ export const SPECIES: SpeciesDef[] = [
     blurb: "Scorches in the sun. Give it shade and a drink every other day.",
     cadenceDays: 2, windowStart: null, windowEnd: null, needsPlot: "shade",
     feedsRequired: 0, prunesRequired: 0, maturesDays: 8, points: 16,
-    unlockCost: 0, overwaterable: false,
+    unlockCost: 0, overwaterable: false, phase: null,
     colors: { leaf: "#4e9e63", leafDark: "#2f6f45", accent: "#8fd48a", accent2: "#6cc17b" },
   },
   {
@@ -53,7 +66,7 @@ export const SPECIES: SpeciesDef[] = [
     blurb: "Thrives on neglect — water it early and the roots rot.",
     cadenceDays: 3, windowStart: null, windowEnd: null, needsPlot: "sun",
     feedsRequired: 0, prunesRequired: 0, maturesDays: 12, points: 24,
-    unlockCost: 0, overwaterable: true,
+    unlockCost: 0, overwaterable: true, phase: null,
     colors: { leaf: "#6faa6a", leafDark: "#4a7d49", accent: "#f2789b", accent2: "#d9527c" },
   },
   {
@@ -61,7 +74,7 @@ export const SPECIES: SpeciesDef[] = [
     blurb: "Opens after dusk. Daytime water runs straight off.",
     cadenceDays: 1, windowStart: 18, windowEnd: 6, needsPlot: "any",
     feedsRequired: 0, prunesRequired: 0, maturesDays: 9, points: 26,
-    unlockCost: 500, overwaterable: false,
+    unlockCost: 500, overwaterable: false, phase: null,
     colors: { leaf: "#4f9e79", leafDark: "#347a5c", accent: "#f4f0ff", accent2: "#cdc2f0" },
   },
   {
@@ -69,7 +82,7 @@ export const SPECIES: SpeciesDef[] = [
     blurb: "Hungry as well as thirsty — feed it three times.",
     cadenceDays: 1, windowStart: null, windowEnd: null, needsPlot: "sun",
     feedsRequired: 3, prunesRequired: 0, maturesDays: 14, points: 32,
-    unlockCost: 700, overwaterable: false,
+    unlockCost: 700, overwaterable: false, phase: null,
     colors: { leaf: "#559a4a", leafDark: "#38702f", accent: "#e8503f", accent2: "#b93225" },
   },
   {
@@ -77,7 +90,7 @@ export const SPECIES: SpeciesDef[] = [
     blurb: "Shade, patience and four feedings. Miss too long and it is gone.",
     cadenceDays: 2, windowStart: null, windowEnd: null, needsPlot: "shade",
     feedsRequired: 4, prunesRequired: 0, maturesDays: 18, points: 60,
-    unlockCost: 1400, overwaterable: false,
+    unlockCost: 1400, overwaterable: false, phase: null,
     colors: { leaf: "#3f8f6e", leafDark: "#2a6b52", accent: "#fbfdff", accent2: "#d8e7f5" },
   },
   {
@@ -85,8 +98,41 @@ export const SPECIES: SpeciesDef[] = [
     blurb: "A month of care and four prunings shape it properly.",
     cadenceDays: 2, windowStart: null, windowEnd: null, needsPlot: "any",
     feedsRequired: 0, prunesRequired: 4, maturesDays: 30, points: 85,
-    unlockCost: 2500, overwaterable: false,
+    unlockCost: 2500, overwaterable: false, phase: null,
     colors: { leaf: "#4d8f5c", leafDark: "#2f6b40", accent: "#8a5f3c", accent2: "#63422a" },
+  },
+  // ---- seasonal: free, but only plantable in their own phase of the year ----
+  {
+    key: "blossom", name: "Cherry Blossom", form: "blossom",
+    blurb: "Spring only. Two weeks of fuss for one week of pink.",
+    cadenceDays: 2, windowStart: null, windowEnd: null, needsPlot: "any",
+    feedsRequired: 0, prunesRequired: 1, maturesDays: 12, points: 40,
+    unlockCost: 0, overwaterable: false, phase: "spring",
+    colors: { leaf: "#6a8f5e", leafDark: "#48653f", accent: "#ffd0e2", accent2: "#f2a3c4" },
+  },
+  {
+    key: "lavender", name: "Lavender", form: "spike",
+    blurb: "Summer only. Full sun, dry feet — water it early and it sulks.",
+    cadenceDays: 3, windowStart: null, windowEnd: null, needsPlot: "sun",
+    feedsRequired: 0, prunesRequired: 0, maturesDays: 10, points: 34,
+    unlockCost: 0, overwaterable: true, phase: "summer",
+    colors: { leaf: "#9dbc93", leafDark: "#6e8a6a", accent: "#b39ae0", accent2: "#8467c4" },
+  },
+  {
+    key: "pumpkin", name: "Field Pumpkin", form: "gourd",
+    blurb: "Autumn only. Greedy: three feeds and a drink every single day.",
+    cadenceDays: 1, windowStart: null, windowEnd: null, needsPlot: "sun",
+    feedsRequired: 3, prunesRequired: 0, maturesDays: 14, points: 46,
+    unlockCost: 0, overwaterable: false, phase: "autumn",
+    colors: { leaf: "#5b9a48", leafDark: "#3c7031", accent: "#f0913a", accent2: "#c9631d" },
+  },
+  {
+    key: "snowdrop", name: "Snowdrop", form: "bell",
+    blurb: "Winter only. Comes up through frozen ground while nothing else dares.",
+    cadenceDays: 2, windowStart: null, windowEnd: null, needsPlot: "shade",
+    feedsRequired: 0, prunesRequired: 0, maturesDays: 8, points: 30,
+    unlockCost: 0, overwaterable: false, phase: "winter",
+    colors: { leaf: "#6fa87a", leafDark: "#487a55", accent: "#dff0e4", accent2: "#c2d8cc" },
   },
 ];
 

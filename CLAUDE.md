@@ -284,16 +284,44 @@ winter. It is **deliberately not called a season** — `seasonNumber` already
 means the weekly league season, and two meanings of one word is how a league
 bug hides in plain sight.
 
-**It must never gate gameplay.** A species that only blooms in October locks
-a November newcomer out for eleven months — the exact "you are too late"
-problem the consistency league was rebuilt to remove, except no amount of
-good care fixes it. If a seasonal species is ever wanted, rotate one
-*in season* monthly for everybody rather than locking any away.
+**It gates exactly one thing: which seeds go in the ground.** Four species
+carry a `phase` and are only plantable during it — Cherry Blossom (spring),
+Lavender (summer), Field Pumpkin (autumn), Snowdrop (winter). They are free;
+the calendar is the gate, not the wallet.
 
-- The phase comes from `state.today` (the server's date in the player's own
-  frozen timezone) and `state.timezone`, never `new Date()`. Southern-
-  hemisphere zones flip it; equatorial ones fall through to northern,
-  where either answer is equally wrong.
+The original objection to a calendar lock was that it recreates the "you are
+too late" problem the consistency league was rebuilt to remove. That was
+overstated: the league ranks `met_days * 100 + total_tended`, whose primary
+term caps at 7 for **everyone**, so a newcomer with a perfect week still
+beats a veteran with five. A phase lock cannot touch the standings. What it
+does touch is *collection* — a player who arrives in November waits for
+spring to try the blossom — and that was judged an acceptable price for the
+garden feeling like it belongs to a year.
+
+The rules that keep it fair:
+
+- **Nothing already growing is ever affected.** The phase is consulted once,
+  at the moment a seed goes in. A pumpkin planted in November finishes in
+  December exactly as it would have.
+- **Each matures well inside its own phase** (8–14 days against ~90), so
+  nobody is handed a plant they cannot finish before the season runs out.
+- **`plant_seed` is the authority.** It raises before writing anything, and
+  the gate sits *before* the plot-kind and occupancy checks, which is what
+  lets the smoke test reach it with plot 0 every time.
+- **`unlockedSpecies` means "plantable today"** — an out-of-phase seasonal
+  is simply absent from it. That keeps the state document honest for any
+  client, including one already loaded in a browser that has never heard of
+  phases and would otherwise offer a seed the server is about to refuse.
+- The UI still *shows* the four, greyed, with the season they return in.
+  Hiding them would mean a player never learns they exist, and finding out
+  the garden has four plants you have not seen is most of the pleasure.
+
+- The phase comes from the server: `year_phase(tz, today)` in Postgres,
+  shipped as `state.yearPhase`. `lib/yearphase.ts` mirrors the same rule and
+  is only a fallback for a state document that predates the field — never
+  `new Date()`, which is the browser's idea of the date. Southern-hemisphere
+  zones flip it; equatorial ones fall through to northern, where either
+  answer is equally wrong.
 - One palette drives it. `paintYearTextures()` repaints sky, hills, ground,
   canopy, bush, blades, tufts and wildflowers **in place** — `ctex` reuses
   the canvas behind a key and every Image already points at it, so a phase
