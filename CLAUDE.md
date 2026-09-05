@@ -277,6 +277,44 @@ pair of hands in it.
   the Graphics at the plot and draw at its origin — that is what `soilPuff`
   and `soilRing` do.
 
+## The turn of the year is weather, not rules
+
+`lib/yearphase.ts` shifts the whole yard through spring, summer, autumn and
+winter. It is **deliberately not called a season** — `seasonNumber` already
+means the weekly league season, and two meanings of one word is how a league
+bug hides in plain sight.
+
+**It must never gate gameplay.** A species that only blooms in October locks
+a November newcomer out for eleven months — the exact "you are too late"
+problem the consistency league was rebuilt to remove, except no amount of
+good care fixes it. If a seasonal species is ever wanted, rotate one
+*in season* monthly for everybody rather than locking any away.
+
+- The phase comes from `state.today` (the server's date in the player's own
+  frozen timezone) and `state.timezone`, never `new Date()`. Southern-
+  hemisphere zones flip it; equatorial ones fall through to northern,
+  where either answer is equally wrong.
+- One palette drives it. `paintYearTextures()` repaints sky, hills, ground,
+  canopy, bush, blades, tufts and wildflowers **in place** — `ctex` reuses
+  the canvas behind a key and every Image already points at it, so a phase
+  change needs nothing destroyed or re-created. This only works for
+  `ctex`-painted textures: `Graphics.generateTexture` refuses a key that
+  already exists.
+- **The sky belongs to both clocks.** `applyTimeOfDay` repaints it every
+  minute, so a seasonal sky painted once is gone before anyone sees it. It
+  is *blended* — `0.45 * (1 - nightF)` toward the phase — because a winter
+  midnight and a summer midnight are the same sky.
+- Summer's palette is the reference: it is exactly the colours the original
+  art pass was tuned against, so a summer garden must look untouched.
+- Winter wildflowers were the tell. Leaving them in full bloom under snow
+  made the whole thing read as a colour filter rather than a season, which
+  is why `PhasePalette.flower` exists.
+- Blossom, leaf-fall and snow are three separate emitters with their own
+  painted textures — they differ in weight and density, not just colour,
+  and CANVAS could not tint one shared speck anyway.
+- Music follows the phase through `music.suggestMode()`, which **never**
+  overrides a player who has chosen a record.
+
 ## Reward beats: every act of care lands
 
 Nothing a player earns may happen silently.

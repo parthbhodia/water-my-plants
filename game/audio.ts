@@ -290,6 +290,19 @@ class Music {
     else this.stop();
   }
 
+  /**
+   * Follow the turn of the year — but never over the top of a choice. A
+   * player who put a record on gets that record back, in any weather.
+   */
+  suggestMode(mode: MusicMode) {
+    try {
+      if (window.localStorage.getItem("lily-music-mode")) return;
+    } catch { return; }
+    if (this.mode === mode) return;
+    this.mode = mode;
+    if (this.playing) { this.stop(); this.start(); }
+  }
+
   setMode(mode: MusicMode) {
     this.mode = mode;
     this.on = true;

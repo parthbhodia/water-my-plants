@@ -9,6 +9,7 @@ import { VARIANT_BY_KEY } from "@/lib/variants";
 // The beats are scheduled here, so the sounds are triggered here: routing
 // them back through React would put a render between a hand and its noise.
 import { sfx } from "./audio";
+import { yearPhase, PHASE_PALETTE, type YearPhase, type PhasePalette } from "@/lib/yearphase";
 import { type Ctx, type Stop, lg, rgrad, rr, ell, blob, petalPath } from "./draw";
 import {
   type Avatar,
@@ -213,6 +214,14 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private crumbs!: Phaser.GameObjects.Particles.ParticleEmitter;
   private pourSplashTimer: Phaser.Time.TimerEvent | null = null;
   private hourOverride: number | null = null;
+  /**
+   * The turn of the year. It changes what the yard looks like and nothing
+   * about what it asks of the player — see lib/yearphase.ts for why that
+   * line is drawn where it is.
+   */
+  private phase: YearPhase = "summer";
+  private pal: PhasePalette = PHASE_PALETTE.summer;
+  private drifters: Partial<Record<"petal" | "leaf" | "snow", Phaser.GameObjects.Particles.ParticleEmitter>> = {};
 
   constructor(bridge: GameBridge) {
     super({ key: "garden" });
@@ -376,12 +385,33 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   setGarden(s: GardenState) {
     const prev = this.garden;
     this.garden = s;
+    // `today` is the server's date in the player's own frozen timezone, so
+    // the yard turns over when their day does, not when the browser's does.
+    this.applyYearPhase(yearPhase(s.today, s.timezone));
     if (!prev) this.selected = s.plots.findIndex((p) => p.unlocked && p.plant) ?? 0;
     if (this.selected < 0) this.selected = 0;
     for (let i = 0; i < PLOTS.length; i++) this.refreshPlot(i);
     this.refreshDecor();
     this.refreshZones();
     this.refreshMarkers();
+  }
+
+  /**
+   * Turn the yard over to a new phase of the year: repaint the seasonal
+   * textures in place, and hand the weather to the right emitter.
+   */
+  private applyYearPhase(p: YearPhase) {
+    if (p === this.phase && this.textures.exists("sky")) return;
+    this.phase = p;
+    this.pal = PHASE_PALETTE[p];
+    this.paintYearTextures();
+    const want = this.pal.drift;
+    (["petal", "leaf", "snow"] as const).forEach((k) => {
+      const em = this.drifters[k];
+      if (!em) return;
+      if (k === want) em.start();
+      else em.stop();
+    });
   }
 
   /** One interpolator drives zoom AND centre — pan+zoom tweens fight. */
@@ -540,61 +570,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     });
 
     // ---- rolling hills (parallax, atmospheric haze) ----
-    this.ctex("hill_far", W, 130, (c) => {
-      c.beginPath();
-      c.moveTo(0, 70);
-      c.quadraticCurveTo(150, 18, 330, 56);
-      c.quadraticCurveTo(500, 92, 660, 42);
-      c.quadraticCurveTo(810, 8, 960, 52);
-      c.lineTo(960, 130); c.lineTo(0, 130); c.closePath();
-      c.fillStyle = lg(c, 0, 0, 0, 130, [[0, "#cfe8d4"], [1, "#aed3bc"]]);
-      c.fill();
-    });
-    this.ctex("hill_near", W, 120, (c) => {
-      c.beginPath();
-      c.moveTo(0, 46);
-      c.quadraticCurveTo(190, 96, 380, 52);
-      c.quadraticCurveTo(560, 12, 730, 58);
-      c.quadraticCurveTo(860, 92, 960, 60);
-      c.lineTo(960, 120); c.lineTo(0, 120); c.closePath();
-      c.fillStyle = lg(c, 0, 0, 0, 120, [[0, "#a9d6a4"], [1, "#84bd88"]]);
-      c.fill();
-      // sparse distant trees
-      c.fillStyle = "rgba(94,160,110,0.55)";
-      for (const [tx, ty, r] of [[120, 58, 14], [300, 66, 11], [640, 52, 13], [880, 70, 10]] as const) {
-        ell(c, tx, ty, r, r * 1.15); c.fill();
-      }
-    });
-
-    // ---- ground with grain + light patches ----
-    this.ctex("ground", W, H - GROUND, (c) => {
-      const h = H - GROUND;
-      c.fillStyle = lg(c, 0, 0, 0, h, [[0, "#94d387"], [0.45, "#6fbc71"], [1, "#4f9e5c"]]);
-      c.fillRect(0, 0, W, h);
-      // sun patches
-      for (const [px, py, pr] of [[180, 60, 120], [700, 90, 150], [430, 180, 170]] as const) {
-        c.fillStyle = rgrad(c, px, py, pr, [[0, "rgba(255,250,200,0.16)"], [1, "rgba(255,250,200,0)"]]);
-        c.fillRect(px - pr, py - pr, pr * 2, pr * 2);
-      }
-      // grass grain
-      for (let i = 0; i < 420; i++) {
-        const gx = Math.random() * W;
-        const gy = Math.random() * h;
-        const l = 3 + Math.random() * 5 + gy * 0.02;
-        c.strokeStyle = Math.random() < 0.5 ? "rgba(37,102,58,0.20)" : "rgba(214,255,205,0.20)";
-        c.lineWidth = 1.6;
-        c.beginPath();
-        c.moveTo(gx, gy);
-        c.quadraticCurveTo(gx + 1.5, gy - l * 0.6, gx + 3, gy - l);
-        c.stroke();
-      }
-      // horizon fringe
-      c.fillStyle = "rgba(47,116,66,0.5)";
-      for (let x = 0; x < W; x += 16) { ell(c, x + 8, 2, 12, 5); c.fill(); }
-      // foreground shade
-      c.fillStyle = lg(c, 0, h - 60, 0, h, [[0, "rgba(20,60,35,0)"], [1, "rgba(20,60,35,0.22)"]]);
-      c.fillRect(0, h - 60, W, 60);
-    });
+    this.paintYearTextures();
 
     // ---- fence with shaded pickets ----
     this.ctex("fence", W, 64, (c) => {
@@ -738,49 +714,6 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       c.strokeStyle = "rgba(50,30,15,0.35)"; c.lineWidth = 1.6;
       c.beginPath(); c.moveTo(17, 8); c.quadraticCurveTo(16, 40, 20, 66); c.stroke();
     });
-    this.ctex("canopy", 300, 280, (c) => {
-      c.scale(2, 2);
-      // chunky leaf clusters, each with its own crescent highlight and
-      // shaded underside, so the crown reads as bunches rather than a blob
-      const orb = (x: number, y: number, r: number, l = 0) => {
-        c.fillStyle = rgrad(c, x - r * 0.35, y - r * 0.4, r * 1.6, [
-          [0, l ? "#b2e6a8" : "#96d98e"], [0.55, l ? "#74c47c" : "#57b166"], [1, l ? "#478f56" : "#357f47"]]);
-        ell(c, x, y, r, r); c.fill();
-        // underside shade
-        c.fillStyle = "rgba(24,70,40,0.28)";
-        c.beginPath(); c.ellipse(x, y + r * 0.45, r * 0.85, r * 0.42, 0, 0, Math.PI); c.fill();
-        // crescent highlight
-        c.fillStyle = "rgba(235,255,220,0.5)";
-        c.beginPath();
-        c.ellipse(x - r * 0.25, y - r * 0.45, r * 0.5, r * 0.28, -0.5, 0, Math.PI * 2);
-        c.fill();
-      };
-      c.fillStyle = "rgba(30,80,45,0.3)"; ell(c, 76, 96, 64, 46); c.fill();
-      orb(34, 92, 26); orb(118, 92, 27); orb(52, 98, 30); orb(100, 100, 31);
-      orb(40, 62, 27, 1); orb(112, 60, 27); orb(75, 44, 34, 1); orb(75, 82, 36);
-      // sparkle dapples
-      c.fillStyle = "rgba(240,255,225,0.55)";
-      for (const [dx, dy, dr] of [[60, 36, 4.5], [92, 32, 3.5], [30, 70, 3.5], [124, 74, 4], [78, 64, 3]] as const) {
-        ell(c, dx, dy, dr, dr); c.fill();
-      }
-    });
-
-    // ---- bush + rock ----
-    this.ctex("bush", 220, 110, (c) => {
-      c.scale(2, 2);
-      const orb = (x: number, y: number, r: number, l = 0) => {
-        c.fillStyle = rgrad(c, x - r * 0.3, y - r * 0.45, r * 1.6, [
-          [0, l ? "#aade9e" : "#84cf84"], [0.6, "#54ab62"], [1, "#357f47"]]);
-        ell(c, x, y, r, r * 0.9); c.fill();
-        c.fillStyle = "rgba(24,70,40,0.25)";
-        c.beginPath(); c.ellipse(x, y + r * 0.4, r * 0.8, r * 0.36, 0, 0, Math.PI); c.fill();
-        c.fillStyle = "rgba(235,255,225,0.5)";
-        c.beginPath(); c.ellipse(x - r * 0.25, y - r * 0.4, r * 0.45, r * 0.24, -0.5, 0, Math.PI * 2); c.fill();
-      };
-      orb(24, 40, 18); orb(86, 42, 19); orb(44, 44, 21); orb(68, 44, 21); orb(55, 26, 22, 1);
-      c.fillStyle = "rgba(240,255,230,0.55)";
-      ell(c, 48, 18, 4, 3.2); c.fill(); ell(c, 68, 24, 3.2, 2.6); c.fill();
-    });
     this.ctex("rock", 100, 64, (c) => {
       c.scale(2, 2);
       c.fillStyle = rgrad(c, 18, 10, 34, [[0, "#cfd6cd"], [0.6, "#a4ada6"], [1, "#7c867f"]]);
@@ -841,68 +774,6 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
         rr(c, px - tw, py, tw * 2, th, tw); c.fill();
       };
       tail(842, 62, 8, 40); tail(866, 104, 7, 32);
-    });
-
-    // ---- flowers (3 colorways, 2x) ----
-    const flowerCols: Array<[string, string]> = [["#ffc9dd", "#ee7fa9"], ["#ffe9a8", "#f5b93e"], ["#dcc9f5", "#9b7fd4"]];
-    flowerCols.forEach(([lo, hi], i) => {
-      this.ctex("flower_" + i, 48, 78, (c) => {
-        c.scale(2, 2);
-        c.strokeStyle = lg(c, 0, 12, 0, 39, [[0, "#57ab62"], [1, "#3c7a46"]]);
-        c.lineWidth = 2.6; c.lineCap = "round";
-        c.beginPath(); c.moveTo(12, 38); c.quadraticCurveTo(11, 26, 12, 15); c.stroke();
-        c.fillStyle = "#57ab62";
-        c.save(); c.translate(9, 30); c.rotate(-0.7); ell(c, -4, 0, 6, 2.6); c.fill(); c.restore();
-        for (let k = 0; k < 6; k++) {
-          const a = (k / 6) * Math.PI * 2;
-          c.fillStyle = rgrad(c, 12 + Math.cos(a) * 4, 11 + Math.sin(a) * 4, 6, [[0, lo], [1, hi]]);
-          ell(c, 12 + Math.cos(a) * 5.5, 11 + Math.sin(a) * 5.5, 4.2, 4.2); c.fill();
-        }
-        c.fillStyle = rgrad(c, 11, 10, 5, [[0, "#fff6d9"], [1, "#f2c94c"]]);
-        ell(c, 12, 11, 3.6, 3.6); c.fill();
-      });
-    });
-
-    // ---- foreground grass blades (2x, 3 silhouettes) ----
-    for (let v = 0; v < 3; v++) {
-      this.ctex("blade_" + v, 76, 116, (c) => {
-        c.scale(2, 2);
-        const n = 5 + v;
-        for (let k = 0; k < n; k++) {
-          const bx = 6 + k * (26 / n) + (v % 2) * 2;
-          const tip = 30 + ((k * 7 + v * 11) % 22);
-          const lean = -5 + ((k * 5 + v * 3) % 11);
-          const dark = (k + v) % 2 === 0;
-          c.fillStyle = lg(c, 0, 56, 0, 56 - tip, [
-            [0, dark ? "#2f7a45" : "#3c8a4e"],
-            [0.55, dark ? "#4f9e5c" : "#5cb46a"],
-            [1, dark ? "#8ed48a" : "#a6e09b"],
-          ]);
-          c.beginPath();
-          c.moveTo(bx - 2.6, 56);
-          c.quadraticCurveTo(bx + lean * 0.35, 56 - tip * 0.55, bx + lean, 56 - tip);
-          c.quadraticCurveTo(bx + lean * 0.5, 56 - tip * 0.5, bx + 2.6, 56);
-          c.closePath();
-          c.fill();
-        }
-      });
-    }
-
-    // ---- grass tuft (2x) ----
-    this.ctex("tuft", 60, 56, (c) => {
-      c.scale(2, 2);
-      const blade = (bx: number, tip: number, lean: number, col0: string, col1: string) => {
-        c.fillStyle = lg(c, 0, 28, 0, 28 - tip, [[0, col1], [1, col0]]);
-        c.beginPath();
-        c.moveTo(bx - 2.4, 28);
-        c.quadraticCurveTo(bx + lean * 0.4, 28 - tip * 0.6, bx + lean, 28 - tip);
-        c.quadraticCurveTo(bx + lean * 0.55, 28 - tip * 0.55, bx + 2.4, 28);
-        c.closePath(); c.fill();
-      };
-      blade(6, 18, -3, "#8fd48a", "#3f8a4e");
-      blade(13, 26, 1, "#a6e09b", "#4d9e5c");
-      blade(21, 20, 4, "#8fd48a", "#3f8a4e");
-      blade(26, 14, 6, "#79c47a", "#3c8a4e");
     });
 
     // ---- glossy hint droplet (2x) ----
@@ -1085,6 +956,27 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     g.generateTexture("glow", 14, 14);
     g.destroy();
 
+    // What falls through the air, one painted texture each. Tinting a single
+    // white speck would have been cheaper and would have rendered white in
+    // all three cases — CANVAS ignores it.
+    this.ctex("drift_petal", 14, 10, (c) => {
+      c.fillStyle = "#ffd3e4"; ell(c, 7, 5, 6.4, 4.2); c.fill();
+      c.fillStyle = "rgba(255,255,255,0.6)"; ell(c, 5, 4, 2.6, 1.6); c.fill();
+      c.fillStyle = "rgba(226,140,178,0.5)"; ell(c, 9.5, 6.5, 3, 1.8); c.fill();
+    });
+    this.ctex("drift_leaf", 16, 12, (c) => {
+      c.fillStyle = "#d08a34";
+      c.beginPath(); c.moveTo(1, 6); c.quadraticCurveTo(8, 0, 15, 6);
+      c.quadraticCurveTo(8, 12, 1, 6); c.closePath(); c.fill();
+      c.strokeStyle = "rgba(120,66,20,0.6)"; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(2, 6); c.lineTo(14, 6); c.stroke();
+      c.fillStyle = "rgba(255,214,150,0.5)"; ell(c, 6, 4.4, 3, 1.4); c.fill();
+    });
+    this.ctex("drift_snow", 10, 10, (c) => {
+      c.fillStyle = "rgba(255,255,255,0.95)"; ell(c, 5, 5, 3.4, 3.4); c.fill();
+      c.fillStyle = "rgba(214,236,248,0.9)"; ell(c, 6.2, 6.2, 1.6, 1.6); c.fill();
+    });
+
     // Soil crumbs, three shapes so a burst does not read as a repeated stamp.
     // Painted, not tinted: Phaser.CANVAS ignores setTint, and gold particles
     // over a plant being pulled out is exactly the wrong sentence.
@@ -1113,6 +1005,204 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     this.anims.create({ key: "flap", frames: [{ key: "bird_0" }, { key: "bird_1" }], frameRate: 7, repeat: -1 });
   }
 
+  /**
+   * Every texture whose colour belongs to the turn of the year, painted from
+   * one palette so a phase change is a repaint rather than a rebuild.
+   *
+   * `ctex` reuses the canvas behind an existing key and calls `refresh()`,
+   * and every Image already on screen is pointing at that same texture — so
+   * repainting here changes the whole yard in place, with nothing to
+   * destroy and no sprite to re-create. (Graphics.generateTexture cannot do
+   * this: createCanvas refuses a key that already exists, which is why only
+   * ctex-painted textures are seasonal.)
+   */
+  private paintYearTextures() {
+    const P = this.pal;
+    /** nudge a hex a little lighter — the "light blade" variants */
+    const shade = (hex: string, amt: number) => {
+      const n = parseInt(hex.slice(1), 16);
+      const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) =>
+        Math.max(0, Math.min(255, Math.round(v + 255 * amt)))
+      );
+      return `rgb(${ch[0]},${ch[1]},${ch[2]})`;
+    };
+    void shade;
+
+    // ---- flowers (3 colorways, 2x) ----
+    // Autumn dries them to seed heads and winter caps them with snow; spring
+    // and summer keep the three colourways they were drawn with. Leaving them
+    // in full bloom under snow was the one thing that gave the winter yard
+    // away as a colour filter rather than a season.
+    const flowerCols: Array<[string, string]> = P.flower
+      ? [P.flower, P.flower, P.flower]
+      : [["#ffc9dd", "#ee7fa9"], ["#ffe9a8", "#f5b93e"], ["#dcc9f5", "#9b7fd4"]];
+    flowerCols.forEach(([lo, hi], i) => {
+      this.ctex("flower_" + i, 48, 78, (c) => {
+        c.scale(2, 2);
+        c.strokeStyle = lg(c, 0, 12, 0, 39, [[0, P.blade[1]], [1, P.blade[0]]]);
+        c.lineWidth = 2.6; c.lineCap = "round";
+        c.beginPath(); c.moveTo(12, 38); c.quadraticCurveTo(11, 26, 12, 15); c.stroke();
+        c.fillStyle = P.blade[1];
+        c.save(); c.translate(9, 30); c.rotate(-0.7); ell(c, -4, 0, 6, 2.6); c.fill(); c.restore();
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * Math.PI * 2;
+          c.fillStyle = rgrad(c, 12 + Math.cos(a) * 4, 11 + Math.sin(a) * 4, 6, [[0, lo], [1, hi]]);
+          ell(c, 12 + Math.cos(a) * 5.5, 11 + Math.sin(a) * 5.5, 4.2, 4.2); c.fill();
+        }
+        c.fillStyle = rgrad(c, 11, 10, 5, P.flower ? [[0, "#fdfbf2"], [1, "#cfc9b4"]] : [[0, "#fff6d9"], [1, "#f2c94c"]]);
+        ell(c, 12, 11, 3.6, 3.6); c.fill();
+      });
+    });
+
+    this.ctex("sky", W, 390, (c) => {
+      c.fillStyle = lg(c, 0, 0, 0, 390, [[0, P.sky[0]], [0.55, P.sky[1]], [1, P.sky[2]]]);
+      c.fillRect(0, 0, W, 390);
+    });
+
+    this.ctex("hill_far", W, 130, (c) => {
+      c.beginPath();
+      c.moveTo(0, 70);
+      c.quadraticCurveTo(150, 18, 330, 56);
+      c.quadraticCurveTo(500, 92, 660, 42);
+      c.quadraticCurveTo(810, 8, 960, 52);
+      c.lineTo(960, 130); c.lineTo(0, 130); c.closePath();
+      c.fillStyle = lg(c, 0, 0, 0, 130, [[0, P.hillFar[0]], [1, P.hillFar[1]]]);
+      c.fill();
+    });
+    this.ctex("hill_near", W, 120, (c) => {
+      c.beginPath();
+      c.moveTo(0, 46);
+      c.quadraticCurveTo(190, 96, 380, 52);
+      c.quadraticCurveTo(560, 12, 730, 58);
+      c.quadraticCurveTo(860, 92, 960, 60);
+      c.lineTo(960, 120); c.lineTo(0, 120); c.closePath();
+      c.fillStyle = lg(c, 0, 0, 0, 120, [[0, P.hillNear[0]], [1, P.hillNear[1]]]);
+      c.fill();
+      // sparse distant trees
+      c.fillStyle = P.distantTree;
+      for (const [tx, ty, r] of [[120, 58, 14], [300, 66, 11], [640, 52, 13], [880, 70, 10]] as const) {
+        ell(c, tx, ty, r, r * 1.15); c.fill();
+      }
+    });
+
+    // ---- ground with grain + light patches ----
+    this.ctex("ground", W, H - GROUND, (c) => {
+      const h = H - GROUND;
+      c.fillStyle = lg(c, 0, 0, 0, h, [[0, P.ground[0]], [0.45, P.ground[1]], [1, P.ground[2]]]);
+      c.fillRect(0, 0, W, h);
+      // sun patches
+      for (const [px, py, pr] of [[180, 60, 120], [700, 90, 150], [430, 180, 170]] as const) {
+        c.fillStyle = rgrad(c, px, py, pr, [[0, "rgba(255,250,200,0.16)"], [1, "rgba(255,250,200,0)"]]);
+        c.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+      }
+      // grass grain
+      for (let i = 0; i < 420; i++) {
+        const gx = Math.random() * W;
+        const gy = Math.random() * h;
+        const l = 3 + Math.random() * 5 + gy * 0.02;
+        c.strokeStyle = Math.random() < 0.5 ? P.grain[0] : P.grain[1];
+        c.lineWidth = 1.6;
+        c.beginPath();
+        c.moveTo(gx, gy);
+        c.quadraticCurveTo(gx + 1.5, gy - l * 0.6, gx + 3, gy - l);
+        c.stroke();
+      }
+      // horizon fringe
+      c.fillStyle = P.fringe;
+      for (let x = 0; x < W; x += 16) { ell(c, x + 8, 2, 12, 5); c.fill(); }
+      // foreground shade
+      c.fillStyle = lg(c, 0, h - 60, 0, h, [[0, "rgba(20,60,35,0)"], [1, "rgba(20,60,35,0.22)"]]);
+      c.fillRect(0, h - 60, W, 60);
+    });
+
+    this.ctex("canopy", 300, 280, (c) => {
+      c.scale(2, 2);
+      // chunky leaf clusters, each with its own crescent highlight and
+      // shaded underside, so the crown reads as bunches rather than a blob
+      const orb = (x: number, y: number, r: number, l = 0) => {
+        c.fillStyle = rgrad(c, x - r * 0.35, y - r * 0.4, r * 1.6, [
+          [0, l ? P.leafLit[0] : P.leaf[0]], [0.55, l ? P.leafLit[1] : P.leaf[1]], [1, l ? P.leafLit[2] : P.leaf[2]]]);
+        ell(c, x, y, r, r); c.fill();
+        // underside shade
+        c.fillStyle = "rgba(24,70,40,0.28)";
+        c.beginPath(); c.ellipse(x, y + r * 0.45, r * 0.85, r * 0.42, 0, 0, Math.PI); c.fill();
+        // crescent highlight
+        c.fillStyle = "rgba(235,255,220,0.5)";
+        c.beginPath();
+        c.ellipse(x - r * 0.25, y - r * 0.45, r * 0.5, r * 0.28, -0.5, 0, Math.PI * 2);
+        c.fill();
+      };
+      c.fillStyle = "rgba(30,80,45,0.3)"; ell(c, 76, 96, 64, 46); c.fill();
+      orb(34, 92, 26); orb(118, 92, 27); orb(52, 98, 30); orb(100, 100, 31);
+      orb(40, 62, 27, 1); orb(112, 60, 27); orb(75, 44, 34, 1); orb(75, 82, 36);
+      // Spring hangs blossom in the crown and winter hangs frost; summer
+      // gets the plain dapples it was drawn with.
+      c.fillStyle = P.fleck ?? "rgba(240,255,225,0.55)";
+      for (const [dx, dy, dr] of [[60, 36, 4.5], [92, 32, 3.5], [30, 70, 3.5], [124, 74, 4], [78, 64, 3]] as const) {
+        ell(c, dx, dy, dr, dr); c.fill();
+      }
+    });
+
+    // ---- bush + rock ----
+    this.ctex("bush", 220, 110, (c) => {
+      c.scale(2, 2);
+      const orb = (x: number, y: number, r: number, l = 0) => {
+        c.fillStyle = rgrad(c, x - r * 0.3, y - r * 0.45, r * 1.6, [
+          [0, l ? P.bush[0] : P.bush[0]], [0.6, P.bush[1]], [1, P.bush[2]]]);
+        ell(c, x, y, r, r * 0.9); c.fill();
+        c.fillStyle = "rgba(24,70,40,0.25)";
+        c.beginPath(); c.ellipse(x, y + r * 0.4, r * 0.8, r * 0.36, 0, 0, Math.PI); c.fill();
+        c.fillStyle = "rgba(235,255,225,0.5)";
+        c.beginPath(); c.ellipse(x - r * 0.25, y - r * 0.4, r * 0.45, r * 0.24, -0.5, 0, Math.PI * 2); c.fill();
+      };
+      orb(24, 40, 18); orb(86, 42, 19); orb(44, 44, 21); orb(68, 44, 21); orb(55, 26, 22, 1);
+      c.fillStyle = "rgba(240,255,230,0.55)";
+      ell(c, 48, 18, 4, 3.2); c.fill(); ell(c, 68, 24, 3.2, 2.6); c.fill();
+    });
+
+    // ---- foreground grass blades (2x, 3 silhouettes) ----
+    for (let v = 0; v < 3; v++) {
+      this.ctex("blade_" + v, 76, 116, (c) => {
+        c.scale(2, 2);
+        const n = 5 + v;
+        for (let k = 0; k < n; k++) {
+          const bx = 6 + k * (26 / n) + (v % 2) * 2;
+          const tip = 30 + ((k * 7 + v * 11) % 22);
+          const lean = -5 + ((k * 5 + v * 3) % 11);
+          const dark = (k + v) % 2 === 0;
+          c.fillStyle = lg(c, 0, 56, 0, 56 - tip, [
+            [0, dark ? P.blade[0] : shade(P.blade[0], 0.08)],
+            [0.55, dark ? P.blade[1] : shade(P.blade[1], 0.08)],
+            [1, dark ? P.blade[2] : shade(P.blade[2], 0.08)],
+          ]);
+          c.beginPath();
+          c.moveTo(bx - 2.6, 56);
+          c.quadraticCurveTo(bx + lean * 0.35, 56 - tip * 0.55, bx + lean, 56 - tip);
+          c.quadraticCurveTo(bx + lean * 0.5, 56 - tip * 0.5, bx + 2.6, 56);
+          c.closePath();
+          c.fill();
+        }
+      });
+    }
+
+    // ---- grass tuft (2x) ----
+    this.ctex("tuft", 60, 56, (c) => {
+      c.scale(2, 2);
+      const blade = (bx: number, tip: number, lean: number, col0: string, col1: string) => {
+        c.fillStyle = lg(c, 0, 28, 0, 28 - tip, [[0, col1], [1, col0]]);
+        c.beginPath();
+        c.moveTo(bx - 2.4, 28);
+        c.quadraticCurveTo(bx + lean * 0.4, 28 - tip * 0.6, bx + lean, 28 - tip);
+        c.quadraticCurveTo(bx + lean * 0.55, 28 - tip * 0.55, bx + 2.4, 28);
+        c.closePath(); c.fill();
+      };
+      blade(6, 18, -3, P.blade[2], P.blade[0]);
+      blade(13, 26, 1, shade(P.blade[2], 0.08), P.blade[1]);
+      blade(21, 20, 4, P.blade[2], P.blade[0]);
+      blade(26, 14, 6, P.blade[1], P.blade[0]);
+    });
+  }
+
   /** (Re)paints every gardener frame with the current avatar palette. */
   private paintGardenerFrames() {
     for (const [key, pose] of POSES) {
@@ -1126,10 +1216,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   // ================= world building =================
 
   private buildSky() {
-    this.skyTex = this.ctex("sky", W, 390, (c) => {
-      c.fillStyle = lg(c, 0, 0, 0, 390, [[0, "#6fb9e8"], [0.55, "#a5d8f0"], [1, "#ddf2e6"]]);
-      c.fillRect(0, 0, W, 390);
-    });
+    // the sky texture itself is painted by paintYearTextures(); its colour
+    // belongs to the season, not to this builder
+    this.skyTex = this.textures.get("sky") as Phaser.Textures.CanvasTexture;
     this.add.image(0, 0, "sky").setOrigin(0).setDepth(0);
 
     // stars
@@ -2146,6 +2235,37 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       tint: [0xf7a8c4, 0xee7fa9, 0xffd76e, 0x8ed69b, 0xa5dcf2],
       emitting: false,
     }).setDepth(960);
+
+    // Blossom, leaf-fall and snow. Three emitters rather than one that
+    // swaps texture: they differ in weight and density as much as in
+    // colour, and a season change is rare enough that two idle emitters
+    // cost nothing. Depth 940 puts them in front of the garden — weather
+    // passes between the player and the yard, not behind it.
+    const drifter = (key: string, cfg: Partial<Phaser.Types.GameObjects.Particles.ParticleEmitterConfig>) =>
+      this.add.particles(0, 0, key, {
+        x: { min: -60, max: W + 60 },
+        y: { min: 60, max: 240 },
+        rotate: { min: 0, max: 360 },
+        alpha: { start: 0.95, end: 0.45 },
+        quantity: 1,
+        emitting: false,
+        ...cfg,
+      }).setDepth(940);
+    this.drifters.petal = drifter("drift_petal", {
+      speedY: { min: 16, max: 30 }, speedX: { min: -14, max: 30 },
+      lifespan: { min: 8000, max: 13000 }, scale: { min: 0.5, max: 0.95 },
+      frequency: 520,
+    });
+    this.drifters.leaf = drifter("drift_leaf", {
+      speedY: { min: 22, max: 40 }, speedX: { min: -20, max: 34 },
+      lifespan: { min: 7000, max: 11000 }, scale: { min: 0.6, max: 1.1 },
+      frequency: 460,
+    });
+    this.drifters.snow = drifter("drift_snow", {
+      speedY: { min: 12, max: 26 }, speedX: { min: -10, max: 18 },
+      lifespan: { min: 10000, max: 16000 }, scale: { min: 0.4, max: 1 },
+      frequency: 190,
+    });
 
     // Earth thrown up by hands and a rake. Heavy gravity and a short life:
     // crumbs fall back into the bed, they do not drift like celebration.
@@ -3405,6 +3525,17 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       }
     }
     this.nightF = n;
+
+    // The sky belongs to BOTH clocks. This function repaints it every
+    // minute, so a purely seasonal sky painted once would be gone before
+    // anybody saw it — the two have to be mixed, not layered. Daylight
+    // carries most of the season; a winter midnight and a summer midnight
+    // are the same sky, so the bias fades out with the light.
+    const bias = 0.45 * (1 - n);
+    const sky = this.pal.sky.map((h) => parseInt(h.slice(1), 16));
+    top = lerpColor(top, sky[0], bias);
+    mid = lerpColor(mid, sky[1], bias);
+    hor = lerpColor(hor, sky[2], bias);
 
     const topS = hx6(top), midS = hx6(mid), horS = hx6(hor);
     const c = this.skyTex.getContext();

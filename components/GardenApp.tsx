@@ -10,6 +10,7 @@ import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
 import type { CompletedLily, GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
 import { welcomeMessage, welcomeMood, tendMessage, tendMood } from "@/lib/messages";
 import { canWaterNow } from "@/lib/species";
+import { yearPhase, PHASE_NOTE, type YearPhase } from "@/lib/yearphase";
 import type { GuideMood } from "@/game/guide";
 import { GUIDE_NAME } from "@/game/guide";
 import GuidePortrait from "./GuidePortrait";
@@ -38,6 +39,14 @@ import CoachMarks from "./CoachMarks";
 import HintRing from "./HintRing";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
+
+/**
+ * Which record suits the weather. Only ever a suggestion — `suggestMode`
+ * refuses to override a player who has chosen one.
+ */
+const PHASE_MUSIC: Record<YearPhase, MusicMode> = {
+  spring: "dawn", summer: "meadow", autumn: "rain", winter: "snow",
+};
 
 export default function GardenApp({ userEmail }: { userEmail: string }) {
   const supabase = useMemo(() => createClient(), []);
@@ -258,6 +267,17 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       bridge.select(pick);
       if (s.tutorialDone === false) setTutorial(true);
       else showToast(welcomeMessage(s), 7000, welcomeMood(s));
+
+      // The garden turns over with the year on its own; Granny only mentions
+      // it the first time a player sees the new one, and never on a first
+      // ever visit, when there is nothing to have changed from.
+      const phase = yearPhase(s.today, s.timezone);
+      music.suggestMode(PHASE_MUSIC[phase]);
+      try {
+        const seen = window.localStorage.getItem("lily-year-phase");
+        window.localStorage.setItem("lily-year-phase", phase);
+        if (seen && seen !== phase) showToast(PHASE_NOTE[phase], 8000, "happy");
+      } catch {}
     });
   }, [supabase, bridge, applyState, showToast]);
 
