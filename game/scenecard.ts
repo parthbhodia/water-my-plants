@@ -79,15 +79,34 @@ function koi(c: Ctx, x: number, y: number, flip: number) {
  * Paints the whole vignette. `decor` is slot->item; `seed` varies the
  * scatter so two gardens never look copy-pasted.
  */
+export type CardOpts = {
+  /**
+   * A showcase card is a 380x210 postcard and caps at 3+4 plants so it does
+   * not turn to soup. The landing page's "day ninety" panel is far bigger
+   * and looks half-empty at those caps — `dense` raises them and splits the
+   * land plants into a staggered back and front row.
+   */
+  dense?: boolean;
+  /**
+   * Multiplies plant size. The "day one" panel holds a single seedling, and
+   * at the normal scale a stage-1 sprout in a 420x300 frame is a speck — the
+   * caption promised a seed and you could not see one.
+   */
+  plantScale?: number;
+};
+
 export function paintGardenCard(
   c: Ctx,
   W: number,
   H: number,
   plants: CardPlant[],
   decor: Array<{ slot: number; item: string }>,
-  seedStr: string
+  seedStr: string,
+  opts: CardOpts = {}
 ) {
   const seed = hash(seedStr || "garden");
+  const dense = !!opts.dense;
+  const pScale = opts.plantScale ?? 1;
 
   // sky + far hill + ground
   c.fillStyle = lg(c, 0, 0, 0, H, [[0, "#a5d8f0"], [0.55, "#cfeade"], [1, "#bfe4c2"]]);
@@ -132,8 +151,8 @@ export function paintGardenCard(
   c.restore();
 
   // plants: water species float, land species line the front
-  const water = plants.filter((p) => SPECIES_BY_KEY[p.species]?.needsPlot === "water").slice(0, 3);
-  const land = plants.filter((p) => SPECIES_BY_KEY[p.species]?.needsPlot !== "water").slice(0, 4);
+  const water = plants.filter((p) => SPECIES_BY_KEY[p.species]?.needsPlot === "water").slice(0, dense ? 4 : 3);
+  const land = plants.filter((p) => SPECIES_BY_KEY[p.species]?.needsPlot !== "water").slice(0, dense ? 9 : 4);
 
   const place = (list: CardPlant[], y: number, x0: number, x1: number, scale: number) => {
     list.forEach((p, i) => {
@@ -142,19 +161,32 @@ export function paintGardenCard(
       const t = list.length === 1 ? 0.5 : i / (list.length - 1);
       c.save();
       c.translate(x0 + (x1 - x0) * t, y);
-      c.scale(scale, scale);
+      c.scale(scale * pScale, scale * pScale);
       drawPlant(c, sp, { stage: p.stage });
       c.restore();
     });
   };
   place(water, H * 0.79, W * 0.36, W * 0.64, 0.5);
-  place(land, H * 0.95, W * 0.12, W * 0.88, 0.58);
+  if (dense && land.length > 4) {
+    // Back row smaller and higher, front row larger — the size difference is
+    // what reads as depth, and the stagger stops them lining up like a fence.
+    const back = land.filter((_, i) => i % 2 === 1);
+    const front = land.filter((_, i) => i % 2 === 0);
+    place(back, H * 0.7, W * 0.1, W * 0.9, 0.46);
+    place(front, H * 0.97, W * 0.06, W * 0.94, 0.66);
+  } else {
+    // A scaled-up single seedling grows DOWNWARD from its baseline, so at
+    // 1.9x the sprout was half under the bottom edge of the canvas. Lift the
+    // row by whatever the extra scale added.
+    place(land, H * (0.95 - (pScale - 1) * 0.12), W * 0.12, W * 0.88, 0.58);
+  }
 
   // placed ornaments, shrunk onto the lawn
-  decor.slice(0, 4).forEach((d, i) => {
+  decor.slice(0, dense ? 6 : 4).forEach((d, i) => {
     c.save();
-    c.translate(W * (0.16 + i * 0.22) + ((seed >> (i + 2)) % 14), H * 0.66);
-    c.scale(0.42, 0.42);
+    const spread = dense ? 0.15 : 0.22;
+    c.translate(W * (0.1 + i * spread) + ((seed >> (i + 2)) % 14), H * (dense ? 0.63 : 0.66));
+    c.scale(dense ? 0.5 : 0.42, dense ? 0.5 : 0.42);
     drawDecor(c, d.item);
     c.restore();
   });

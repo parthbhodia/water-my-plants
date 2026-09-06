@@ -11,6 +11,7 @@ import StepRow from "@/components/StepRow";
 import { Reveal } from "@/components/motion/Reveal";
 import { ParallaxLayer } from "@/components/motion/Parallax";
 import Showcase from "@/components/Showcase";
+import GrowthJourney from "@/components/GrowthJourney";
 import PlantCards from "@/components/PlantCards";
 import FaqList from "@/components/FaqList";
 import SiteFooter from "@/components/SiteFooter";
@@ -125,6 +126,8 @@ export default async function LandingPage() {
         </Reveal>
         <PlantCards />
       </section>
+
+      <GrowthJourney />
 
       <Showcase />
 

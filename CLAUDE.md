@@ -504,6 +504,30 @@ it. Tapping a plant that cannot drink only selects it, and `WaterFab` routes
 to a plant that can — so the UI cannot rot a cactus. The card explains why
 the button is pointing elsewhere.
 
+## The landing page shows the journey, not just the destination
+
+`components/GrowthJourney.tsx` sits directly above the Showcase: two
+vignettes side by side, day one and day ninety, painted with the game's own
+`paintGardenCard` so they cannot drift from what the game looks like.
+
+- **The empty panel is what gives the full one meaning.** A picture of a
+  finished garden on its own is a nice drawing that says nothing about where
+  it came from. The contrast is the message.
+- **They never stack.** Side by side at every width, shrinking together —
+  stacked, you scroll from one to the other and compare from memory, which
+  is the one thing this section exists to avoid. The empty panel gives up
+  more width than the full one, because it has less to show.
+- **Honest about the cost.** The ninety days are named, not hidden, so
+  nobody arrives expecting the garden to show up fully grown.
+- **It is an illustration, and must never be mistaken for a real garden.**
+  The Showcase immediately below is where real players' gardens live. Do not
+  blur those two.
+- `paintGardenCard` takes `{ dense, plantScale }`: `dense` raises the 3+4
+  plant cap and splits land plants into staggered back and front rows for
+  the big panel; `plantScale` exists because a lone stage-1 sprout was a
+  speck in a 420x300 frame, and scaling it also has to lift the row, since
+  plants grow downward from their baseline and it fell off the bottom edge.
+
 ## Panels: one job per tab
 
 The pull-up sheet had all seven panels stacked under **Garden** and nobody
