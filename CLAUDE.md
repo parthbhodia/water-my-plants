@@ -522,6 +522,35 @@ vignettes side by side, day one and day ninety, painted with the game's own
 - **It is an illustration, and must never be mistaken for a real garden.**
   The Showcase immediately below is where real players' gardens live. Do not
   blur those two.
+The two journey panels pass `lush`, and **nothing else does** — `GardenCard`
+(real players' showcase postcards) and `HeroGarden` render byte-identical to
+before, verified by screenshotting a card either side of the change. It is a
+separate painter rather than more flags threaded through the old one, because
+the composition differs in kind:
+
+- **The horizon is high.** The old card gave 56% of the frame to empty sky.
+- **The fence stands ON the ground line.** It used to be painted *above* the
+  horizon, hanging in the sky, which is most of why the top of the card read
+  as detached from the garden. A flowering hedge fills the strip beneath it.
+- **Plants live in beds, not in rows.** Twelve plants spaced evenly across a
+  lawn read as twelve objects; four beds at three distances read as a garden
+  somebody laid out. Tallest species go to the farthest beds — that is how a
+  border is actually planted, and it stops the near row hiding the far one.
+- **Beds are underplanted** (`groundCover`). Three plants on a bare brown
+  ellipse read as a hole in the lawn. The day-one bed is the deliberate
+  exception: turned earth and one sprout, because handing a newcomer a full
+  bed destroys the contrast the pair of pictures exists to draw.
+- **Everything casts a contact shadow**, sized from `plantHeightPx` rather
+  than from the sprite scale — a sprout and a sunflower at the same scale do
+  not cast the same shadow. This is the single biggest "pasted on" fix.
+- **One light direction** (warm from the upper left, cool into the lower
+  right) plus an aerial-haze band at the horizon. Size falloff alone does not
+  read as depth.
+- **The lily is the hero.** The game is called Lily Days and the namesake used
+  to be a half-inch speck at the back of the pond. She is now front of the
+  water, the largest single plant in the picture, with the light gathered
+  behind her — and day one is a lily pad, not somebody else's seedling.
+
 - `paintGardenCard` takes `{ dense, plantScale }`: `dense` raises the 3+4
   plant cap and splits land plants into staggered back and front rows for
   the big panel; `plantScale` exists because a lone stage-1 sprout was a

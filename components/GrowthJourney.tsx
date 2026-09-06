@@ -23,20 +23,21 @@ import { paintGardenCard, type CardPlant } from "@/game/scenecard";
  * two must not be confused for one another.
  */
 
-const DAY1: CardPlant[] = [{ species: "sunflower", stage: 1 }];
-
-const DAY90: CardPlant[] = [
-  { species: "lily", stage: 6 },
-  { species: "sunflower", stage: 6 },
-  { species: "fern", stage: 6 },
-  { species: "cactus", stage: 6 },
-  { species: "moonflower", stage: 6 },
-  { species: "tomato", stage: 6 },
-  { species: "orchid", stage: 6 },
-  { species: "bonsai", stage: 6 },
-  { species: "lavender", stage: 6 },
-  { species: "pumpkin", stage: 6 },
+/**
+ * The game is called Lily Days, so day one is a lily — the pond and the first
+ * pad on it. Starting the story on somebody else's seedling left the namesake
+ * nowhere in the picture that sells the game.
+ */
+const DAY1: CardPlant[] = [
+  { species: "lily", stage: 1 },
+  { species: "sunflower", stage: 1 },
 ];
+
+/** All twelve species. The collection IS the ninety days, so show the lot. */
+const DAY90: CardPlant[] = [
+  "lily", "orchid", "blossom", "moonflower", "bonsai", "lavender",
+  "snowdrop", "sunflower", "fern", "cactus", "tomato", "pumpkin",
+].map((species) => ({ species, stage: 6 }));
 
 const DECOR = [
   "decor_arch", "decor_bench", "decor_birdbath",
@@ -44,14 +45,14 @@ const DECOR = [
 ];
 
 function Vignette({
-  plants, decor, seed, w, h, dense, plantScale, label,
+  plants, decor, seed, w, h, lush, plantScale, label,
 }: {
   plants: CardPlant[];
   decor: string[];
   seed: string;
   w: number;
   h: number;
-  dense?: boolean;
+  lush?: boolean;
   plantScale?: number;
   label: string;
 }) {
@@ -72,9 +73,9 @@ function Vignette({
       c, w, h, plants,
       decor.map((item, slot) => ({ slot, item })),
       seed,
-      { dense, plantScale }
+      { lush, plantScale }
     );
-  }, [plants, decor, seed, w, h, dense, plantScale]);
+  }, [plants, decor, seed, w, h, lush, plantScale]);
 
   return <canvas ref={ref} className="gj-canvas" aria-label={label} />;
 }
@@ -91,12 +92,12 @@ export default function GrowthJourney() {
         <figure className="gj-panel gj-then">
           <Vignette
             plants={DAY1} decor={[]} seed="lily-day-one"
-            w={420} h={300} plantScale={1.9}
-            label="A new garden on day one: a pond and a single seedling"
+            w={420} h={300} lush plantScale={1.7}
+            label="A new garden on day one: a pond with one lily pad and a seedling beside it"
           />
           <figcaption>
             <b>Day 1</b>
-            <span>One pond, one seedling.</span>
+            <span>One pond, one lily pad.</span>
           </figcaption>
         </figure>
 
@@ -107,17 +108,17 @@ export default function GrowthJourney() {
         <figure className="gj-panel gj-now">
           <Vignette
             plants={DAY90} decor={DECOR} seed="lily-day-ninety"
-            w={680} h={300} dense
-            label="The same garden after ninety days: ten plants in bloom and six ornaments"
+            w={680} h={300} lush
+            label="The same garden after ninety days: all twelve species in bloom and six ornaments"
           />
           <figcaption>
             <b>Day 90</b>
             {/* Named, not just counted — the species are the plan. Trimmed
-                to four and a count, because the full list of ten ran to six
-                lines on a phone and swamped the picture it describes. */}
+                to four and a count, because the full list ran to six lines on
+                a phone and swamped the picture it describes. */}
             <span>
-              Ten in bloom and six ornaments — Sunflower, Ghost Orchid,
-              Bonsai, Water Lily and six more.
+              All twelve in bloom — Water Lily, Ghost Orchid, Cherry Blossom,
+              Moonflower and eight more.
             </span>
           </figcaption>
         </figure>
