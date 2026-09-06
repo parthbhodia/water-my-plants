@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "eslint app components game lib utils"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
@@ -21,6 +22,8 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.4",
     "typescript": "^5"
   }
 }

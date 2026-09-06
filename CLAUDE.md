@@ -127,6 +127,32 @@ And note the smoke test **cannot** catch any of this: it runs as the owner.
 Testing a grant needs `set local role authenticated;` (or `anon`) inside the
 rolled-back block — that is the only way to see what a real client sees.
 
+### `npm run lint` — the gate that did not exist
+
+A `useEffect` placed below an early return took the **whole Shop tab down
+for every player** ("Rendered more hooks than during the previous render"),
+and `tsc --noEmit`, `next build` and the mobile audit all reported clean.
+None of them knows the rules of hooks, and this repo had **no ESLint config
+and no lint script at all**, so the rule that catches it instantly had never
+run here.
+
+The mobile audit specifically *cannot* see this class of bug: the sandbox
+blocks browser→Supabase, so a panel that early-returns while its data loads
+(`if (!shop) return …`) takes that branch on every render in the fixture.
+The second render — the one that trips the crash — never happens.
+
+`eslint.config.mjs` is deliberately narrow: `react-hooks/rules-of-hooks` as
+an **error**, `exhaustive-deps` as a warning, nothing else. A hundred
+cosmetic rules on a codebase that has never been linted would bury the one
+rule that matters. Verified to catch the exact regression when it is
+reintroduced.
+
+Note `next lint` is deprecated in Next 15 and crashes on a flat config
+("Converting circular structure to JSON") — the script calls `eslint`
+directly.
+
+**Run it with the other gates before shipping UI work.**
+
 ## Testing the UI
 
 The sandbox proxy blocks browser→Supabase, so no logged-in E2E. Instead:
