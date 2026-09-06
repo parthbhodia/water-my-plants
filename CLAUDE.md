@@ -80,28 +80,52 @@ gates on the `is_bloomed` *flag*, not `bloomed_at` (separate columns), and
 Also run `get_advisors` after DDL: it is what caught `anon` being able to
 call `restore_fixture` and `claim_weekly_gift`.
 
-**`revoke execute ... from anon` is a no-op.** Postgres grants EXECUTE on
-every new function to `PUBLIC`, and `anon` inherits from there — it never
-holds a direct grant, so revoking one removes nothing. The revoke has to
-name **`public`**, with anything a signed-in player still needs granted back:
+### Grants: there are TWO ways a function is reachable
+
+A function ends up callable over `/rest/v1/rpc/<name>` by one of two
+mechanisms, and **the revoke that closes one does nothing to the other**:
+
+| `proacl` shows | how it is reachable | what closes it |
+|---|---|---|
+| `null` or `=X/postgres` | the PUBLIC default | `revoke … from public` |
+| `anon=X/postgres` | Supabase's `alter default privileges` | `revoke … from anon` |
+
+Both mistakes have been made in this repo, in both directions:
+
+- Migration **0021** wrote `revoke … from anon` for six functions that held
+  PUBLIC grants. All six lines were inert and all six were still open to
+  `anon` until migration 0030.
+- Migration **0030** then wrote `revoke … from public` for seven helpers
+  that held explicit `anon=X` grants. Also inert — the revoke ran clean and
+  all seven were still callable afterwards.
+
+So: **read the ACL first, then pick the verb.** When in doubt name all
+three (`from public, anon, authenticated`) and grant back what is needed.
+
+**Never trust the SQL you just ran — ask the database:**
 
 ```sql
-revoke execute on function public.thing() from public;
-grant  execute on function public.thing() to authenticated;
+select p.proname,
+       has_function_privilege('anon', p.oid, 'execute') as anon_can,
+       coalesce(array_to_string(p.proacl, ' | '), '(PUBLIC default)') as acl
+from pg_proc p where p.pronamespace = 'public'::regnamespace;
 ```
 
-Every `revoke ... from anon` line in migrations 0021 and earlier is
-therefore decorative; the advisor still lists those functions, which is why.
-Practically they are all guarded by `if v_uid is null then raise`, so the
-exposure is a rude error rather than a hole — but the grants are not doing
-what the SQL says they are. Check the real answer, never the intent:
+The intended surface, as of 0030: **`get_showcase` is the only function
+`anon` may call** (the landing page shows real gardens to logged-out
+visitors). Everything else is `authenticated` or nothing. Internal helpers
+— `local_today`, `safe_timezone`, `level_floor`, `year_phase`, `band_label`,
+`tier_name`, the league maths — are callable by neither; every caller is a
+SECURITY DEFINER function, which runs as the owner and keeps its access.
 
-```sql
-select has_function_privilege('anon', p.oid, 'execute') …
-```
+Before revoking, check nothing *else* depends on the function: **RLS
+policies, column defaults and check constraints are evaluated as the
+CALLING user**, so a revoke there breaks ordinary table reads. Query
+`pg_policy`, `pg_attrdef` and `pg_constraint` for the name first.
 
-And note the smoke test **cannot** catch this: it runs as the owner. Testing
-a grant needs `set local role authenticated;` inside the rolled-back block.
+And note the smoke test **cannot** catch any of this: it runs as the owner.
+Testing a grant needs `set local role authenticated;` (or `anon`) inside the
+rolled-back block — that is the only way to see what a real client sees.
 
 ## Testing the UI
 
