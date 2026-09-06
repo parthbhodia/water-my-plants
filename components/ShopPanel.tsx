@@ -63,13 +63,15 @@ export default function ShopPanel({
     void load();
   };
 
-  if (!shop) return <p className="gallery-empty">Opening the potting shed…</p>;
-
-  const groups: Array<{ title: string; note: string; kinds: ShopItem["kind"][] }> = [
-    { title: "Supplies", note: "Only the trickier species need these.", kinds: ["consumable", "tool"] },
-    { title: "New species", note: "Each one is a different daily commitment. Buy what you can keep up with.", kinds: ["species"] },
-  ];
-
+  /**
+   * Scroll to and flash the item a dead plant sent the player here to find.
+   *
+   * This MUST sit above the `if (!shop)` early return below. Hooks run in
+   * order on every render, and placing it after the return meant the first
+   * render (shop still null) ran three hooks and the next ran four — which
+   * is "Rendered more hooks than during the previous render", and it took
+   * the whole Shop tab down with a client-side exception.
+   */
   useEffect(() => {
     if (!focusKey || !shop) return;
     const el = document.querySelector(`[data-shop-key="${focusKey}"]`) as HTMLElement | null;
@@ -81,6 +83,13 @@ export default function ShopPanel({
     el.classList.add("shop-lookhere");
     onFocused?.();
   }, [focusKey, shop, onFocused]);
+
+  if (!shop) return <p className="gallery-empty">Opening the potting shed…</p>;
+
+  const groups: Array<{ title: string; note: string; kinds: ShopItem["kind"][] }> = [
+    { title: "Supplies", note: "Only the trickier species need these.", kinds: ["consumable", "tool"] },
+    { title: "New species", note: "Each one is a different daily commitment. Buy what you can keep up with.", kinds: ["species"] },
+  ];
 
   return (
     <div className="shop">
