@@ -3,10 +3,10 @@
 import { useState } from "react";
 import {
   Droplets, Clock, Sun, Cloud, Waves, Sprout, Leaf, TriangleAlert, Sparkles,
-  ChevronDown, Flower2, FlaskConical, Nut, Scissors,
+  ChevronDown, Flower2, FlaskConical, Nut, Scissors, ShoppingBasket, BellRing,
 } from "lucide-react";
 import { SPECIES_BY_KEY, windowOpen, canWaterNow, tendVerb } from "@/lib/species";
-import { PLANT_FACTS } from "@/lib/plantfacts";
+import { PLANT_FACTS, deathStory } from "@/lib/plantfacts";
 import { VARIANT_BY_KEY } from "@/lib/variants";
 import type { GardenState, PlotState, PlantState } from "@/lib/types";
 import PlantIcon from "./PlantIcon";
@@ -58,6 +58,8 @@ export default function PlantCard({
   onPlant,
   onClear,
   onRevive,
+  onShop,
+  onReminders,
 }: {
   state: GardenState;
   selected: number;
@@ -66,6 +68,9 @@ export default function PlantCard({
   onPlant: (p: PlotState) => void;
   onClear: (i: number) => void;
   onRevive: (i: number) => void;
+  /** Route to the Shop with the tonic highlighted — never make them hunt. */
+  onShop: () => void;
+  onReminders: () => void;
 }) {
   const [openDetail, setOpenDetail] = useState(false);
   const plot = state.plots[selected];
@@ -114,6 +119,7 @@ export default function PlantCard({
   // ---- dead: nothing about care is true any more ----
   if (plant.dead) {
     const goneFor = plant.lastCareOn ? daysBetween(plant.lastCareOn, state.today) : null;
+    const story = deathStory(sp, goneFor);
     return (
       <section className="plant-card-live gone" aria-label={`${sp.name} died`}>
         {/*
@@ -141,18 +147,32 @@ export default function PlantCard({
           <span className="pcl-sub">Plot {selected + 1}</span>
         </div>
 
+        {/*
+          The number on its own meant nothing — thirteen days is a shrug to a
+          cactus and fatal to a fern. This says what she asked for, how many
+          drinks were actually missed, and the one change that prevents the
+          next one. It is the only place in the game that does not soften.
+        */}
+        <div className={`pcl-post-mortem sev-${story.severity}`}>
+          <p className="pcl-why">{story.why}</p>
+          <p className="pcl-lesson">{story.lesson}</p>
+        </div>
+
         <div className="plot-buttons">
           {tonics > 0 ? (
             <button className="btn small" disabled={busy} onClick={() => onRevive(selected)}>
               <FlaskConical size={15} strokeWidth={2.4} aria-hidden /> Revive her ({tonics})
             </button>
           ) : (
-            <span className="pcl-note">
-              A revival tonic from the Shop would bring her back.
-            </span>
+            <button className="btn small" disabled={busy} onClick={onShop}>
+              <ShoppingBasket size={15} strokeWidth={2.4} aria-hidden /> Get a revival tonic
+            </button>
           )}
           <button className="btn pink small" disabled={busy} onClick={() => onClear(selected)}>
             <Flower2 size={15} strokeWidth={2.4} aria-hidden /> Clear the plot
+          </button>
+          <button className="btn ghost small" onClick={onReminders}>
+            <BellRing size={15} strokeWidth={2.4} aria-hidden /> Turn on reminders
           </button>
         </div>
       </section>

@@ -116,7 +116,7 @@ export default function DevMobile() {
                   onSelect={(i)=>setSel(i)} onTend={(i,a)=>bridge.tend(i,a)} onPlant={()=>setModal("seed")} onClear={()=>{}} onRevive={()=>{}} />
                 {/* the tend buttons now live on the card, not the chip row */}
                 <PlantCard state={STATE} selected={sel} busy={false}
-                  onTend={(i,a)=>bridge.tend(i,a)} onPlant={()=>setModal("seed")} onClear={()=>{}} onRevive={()=>{}} />
+                  onTend={(i,a)=>bridge.tend(i,a)} onPlant={()=>setModal("seed")} onClear={()=>{}} onRevive={()=>{}} onShop={()=>{}} onReminders={()=>{}} />
                 <ExpandPanel state={STATE} busy={false} onBreakGround={()=>{}} />
                 <RestorePanel state={STATE} onState={()=>{}} showToast={()=>{}} />
               </>

@@ -4,6 +4,7 @@ import { Flower2, FlaskConical, X, ShoppingBasket } from "lucide-react";
 import { SPECIES_BY_KEY } from "@/lib/species";
 import type { GardenState } from "@/lib/types";
 import PlantIcon from "./PlantIcon";
+import { deathStory } from "@/lib/plantfacts";
 import GuidePortrait from "./GuidePortrait";
 
 const DAY_WORDS = [
@@ -55,6 +56,7 @@ export default function GonePlantModal({
 
   const goneFor = plant.lastCareOn ? daysBetween(plant.lastCareOn, state.today) : null;
   const tonics = state.inventory?.tonic ?? 0;
+  const story = deathStory(sp, goneFor);
   const first = (state.displayName ?? "").trim().split(/\s+/)[0] ?? "";
   const dear = first.length > 1 && first.length <= 16 ? first : "love";
 
@@ -78,12 +80,20 @@ export default function GonePlantModal({
             {goneFor !== null ? `${spellDays(goneFor)} without water.` : "She did not make it."}
           </p>
 
+          {/* The cause, before the comfort. A number with no contract
+              attached teaches nothing — thirteen days is a shrug to a cactus
+              and fatal to a fern. */}
+          <div className={`pcl-post-mortem sev-${story.severity}`}>
+            <p className="pcl-why">{story.why}</p>
+            <p className="pcl-lesson">{story.lesson}</p>
+          </div>
+
           <div className="gm-granny">
             <GuidePortrait mood="mourn" size={46} />
             <p>
               {tonics > 0
                 ? `We can still bring her back, ${dear} — you've a tonic in the shed. Or clear the bed and let something new have the light.`
-                : `It happens to every gardener, ${dear}. A revival tonic would bring her back, or we clear the bed and plant again. No wrong answer.`}
+                : `It happens to every gardener, ${dear} — but it need not happen twice. A tonic brings her back, or we clear the bed and plant again.`}
             </p>
           </div>
 

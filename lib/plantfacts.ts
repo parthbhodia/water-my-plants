@@ -80,3 +80,68 @@ export const PLANT_FACTS: Record<string, PlantFact> = {
     tooMuch: "A small pot cannot drain a big drink. Keep it modest.",
   },
 };
+
+// ============================================================
+// What actually happened, and what to do differently.
+//
+// A dead plant used to say only "Thirteen days without water." — a fact
+// with no cause attached. It never said what the plant had ASKED for, so
+// the number meant nothing: thirteen days is nothing to a cactus and a
+// death sentence to a fern.
+//
+// The tone is deliberate. This is the one screen in the game that should
+// not be soothing: a plant a player kept for two weeks is gone, it was
+// avoidable, and pretending otherwise teaches nothing. Granny stays warm —
+// she does not scold — but she is straight about what went wrong and names
+// the one change that would have prevented it.
+// ============================================================
+
+import type { SpeciesDef } from "./species";
+
+export type DeathStory = {
+  /** The cause, in numbers the player can check. */
+  why: string;
+  /** What to do differently. Never vague — one concrete change. */
+  lesson: string;
+  /** How badly it was missed, for styling. */
+  severity: "near" | "clear" | "long";
+};
+
+const DAY_WORDS = [
+  "no days", "one day", "two days", "three days", "four days", "five days",
+  "six days", "seven days", "eight days", "nine days", "ten days",
+  "eleven days", "twelve days", "thirteen days", "fourteen days",
+];
+const words = (n: number) => DAY_WORDS[n] ?? `${n} days`;
+
+export function deathStory(sp: SpeciesDef, goneDays: number | null): DeathStory {
+  const cadence = sp.cadenceDays;
+  const drink = cadence === 1 ? "every day" : `every ${cadence} days`;
+
+  if (goneDays === null) {
+    return {
+      why: `A ${sp.name} needs a drink ${drink}, and did not get one in time.`,
+      lesson: "Reminders are the whole trick. Turn them on and the next one lives.",
+      severity: "clear",
+    };
+  }
+
+  // How many drinks she actually missed, not how many days passed — a
+  // three-day plant left six days missed two, not six.
+  const missed = Math.max(1, Math.floor(goneDays / cadence));
+  const severity: DeathStory["severity"] =
+    goneDays <= cadence + 1 ? "near" : missed >= 4 ? "long" : "clear";
+
+  const why =
+    `She drank ${drink}. ${words(goneDays)[0].toUpperCase() + words(goneDays).slice(1)} ` +
+    `went by — ${missed === 1 ? "one drink" : `${missed} drinks`} missed.`;
+
+  const lesson =
+    severity === "near"
+      ? "She was one day short of making it. That is the hardest kind to lose — a reminder would have caught it."
+      : severity === "long"
+      ? `${words(goneDays)[0].toUpperCase() + words(goneDays).slice(1)} is a long time to leave someone who asks ${drink}. This one was avoidable. Turn reminders on before you plant the next.`
+      : `${drink === "every day" ? "One tap a day" : `One tap ${drink}`} would have kept her. Set a reminder and the next one lives.`;
+
+  return { why, lesson, severity };
+}

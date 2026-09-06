@@ -434,6 +434,38 @@ Nothing a player earns may happen silently.
 - **Dewdrops**: the `+N` flies to the wallet counter and pulses it
   (`onDewBanked`), so earning and balance read as one event.
 
+## A death has to teach something
+
+The dead card used to say only "Thirteen days without water." — a number
+with no contract attached, which teaches nothing, because thirteen days is a
+shrug to a cactus and fatal to a fern. `deathStory()` in `lib/plantfacts.ts`
+now supplies three things:
+
+- **The cause, in checkable numbers.** "She drank every 2 days. Thirteen days
+  went by — 6 drinks missed." Missed *drinks*, not days: a three-day plant
+  left six days missed two, not six.
+- **One concrete change**, never a vague apology, graded by severity —
+  `near` (one day short), `clear`, `long` (four or more drinks missed). Only
+  the `long` copy says "this one was avoidable"; saying it to somebody who
+  missed by a day would be untrue and unkind.
+- **Somewhere to go.** "Get a revival tonic" is a button that opens the Shop
+  *and flashes the tonic* (`focusKey` on `ShopPanel`), because sending a
+  grieving player to the top of a four-group shop is still making them hunt.
+  "Turn on reminders" goes to Profile — the reminder is the actual fix.
+
+**This is the one screen that does not soften.** Granny stays warm and never
+scolds, but she is straight about what went wrong. Everywhere else the game
+forgives; here it explains.
+
+The prevention side is the seed picker: every card states the commitment
+*before* you take it — how often, how long, **how many visits in total**, and
+a warning on the species where watering early is what kills them. Most
+players used to learn a plant's contract the day it died.
+
+Two alerts about the same death is one too many. `TodayBrief` was deleted:
+it and `NextStep` both read `pending_care`'s priority, but only `NextStep`
+names a plot and carries a button, so it wins.
+
 ## Explaining the plant, not just the rule
 
 `components/PlantCard.tsx` shows the selected plant's contract in plain

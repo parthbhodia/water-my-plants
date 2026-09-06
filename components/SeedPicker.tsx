@@ -1,6 +1,8 @@
 "use client";
 
 import { SPECIES, careSummary, PLOT_LABEL, type SpeciesDef } from "@/lib/species";
+import { PLANT_FACTS } from "@/lib/plantfacts";
+import { Droplets, CalendarDays, TriangleAlert } from "lucide-react";
 import type { PlotState } from "@/lib/types";
 import { PHASE_NAME, type YearPhase } from "@/lib/yearphase";
 import PlantIcon from "./PlantIcon";
@@ -38,8 +40,8 @@ export default function SeedPicker({
           <button className="btn ghost small" onClick={onClose}>✕ close</button>
         </div>
         <p className="journal-sub">
-          This is a <b>{PLOT_LABEL[plot.kind].toLowerCase()}</b>. Each species wants something
-          different — pick one whose needs you can actually keep up with.
+          This is a <b>{PLOT_LABEL[plot.kind].toLowerCase()}</b>. Every one of these is a
+          promise to show up — check what it asks for before you plant it, not after.
         </p>
 
         <div className="seed-grid">
@@ -61,6 +63,33 @@ export default function SeedPicker({
                   <PlantIcon species={s} stage={6} size={76} />
                 </div>
                 <h4>{s.name}</h4>
+                {/*
+                  What you are signing up for, before you sign up for it.
+                  The care contract used to be one grey line under the name,
+                  read as decoration, and the first time most players learned
+                  what a plant actually wanted was the day it died. This says
+                  the commitment in the units that matter — how often, for how
+                  long, how many visits in total — and names the one way this
+                  particular plant is usually lost.
+                */}
+                <p className="seed-ask">
+                  <Droplets size={13} strokeWidth={2.7} aria-hidden />
+                  {s.cadenceDays === 1 ? "Every day" : `Every ${s.cadenceDays} days`}
+                  <span className="seed-ask-sep">·</span>
+                  <CalendarDays size={13} strokeWidth={2.7} aria-hidden />
+                  {s.maturesDays} days to bloom
+                </p>
+                <p className="seed-visits">
+                  About {Math.max(1, Math.round(s.maturesDays / s.cadenceDays))} visits in all
+                  {s.feedsRequired > 0 && `, plus ${s.feedsRequired} feeds`}
+                  {s.prunesRequired > 0 && `, plus ${s.prunesRequired} prunes`}.
+                </p>
+                {PLANT_FACTS[s.key]?.tooMuch && s.overwaterable && (
+                  <p className="seed-warn">
+                    <TriangleAlert size={13} strokeWidth={2.7} aria-hidden />
+                    Watering early hurts this one.
+                  </p>
+                )}
                 <p className="seed-care">{careSummary(s)}</p>
                 <p className="seed-blurb">{s.blurb}</p>
                 <div className="seed-foot">

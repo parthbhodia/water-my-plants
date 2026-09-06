@@ -23,10 +23,19 @@ export default function ShopPanel({
   state,
   onBought,
   showToast,
+  focusKey,
+  onFocused,
 }: {
   state: GardenState;
   onBought: (s: GardenState) => void;
   showToast: (m: string) => void;
+  /**
+   * An item to scroll to and flash on arrival. A dead plant says "get a
+   * revival tonic" and then sends you here — landing at the top of a shop
+   * with four groups and thirteen items is still making you hunt.
+   */
+  focusKey?: string | null;
+  onFocused?: () => void;
 }) {
   const [shop, setShop] = useState<ShopState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -61,6 +70,18 @@ export default function ShopPanel({
     { title: "New species", note: "Each one is a different daily commitment. Buy what you can keep up with.", kinds: ["species"] },
   ];
 
+  useEffect(() => {
+    if (!focusKey || !shop) return;
+    const el = document.querySelector(`[data-shop-key="${focusKey}"]`) as HTMLElement | null;
+    if (!el) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+    el.classList.remove("shop-lookhere");
+    void el.offsetWidth; // reflow, so the flash replays on a repeat visit
+    el.classList.add("shop-lookhere");
+    onFocused?.();
+  }, [focusKey, shop, onFocused]);
+
   return (
     <div className="shop">
       <div className="shop-head">
@@ -69,7 +90,8 @@ export default function ShopPanel({
       </div>
       <p className="shop-note">
         Everything here is bought with dewdrops you earned by tending. There is nothing to
-        buy with real money, and plots are never for sale — they come from milestones.
+        buy with real money — not a single thing, ever. New beds are earned the same way:
+        dewdrops you saved, plus a gardener level you cannot buy.
       </p>
 
       {groups.map((g) => (
@@ -80,7 +102,8 @@ export default function ShopPanel({
               const sp = item.species ? SPECIES_BY_KEY[item.species] : null;
               const maxed = item.maxQty !== null && item.owned >= item.maxQty;
               return (
-                <div key={item.key} className={`shop-card ${maxed ? "owned" : ""}`}>
+                <div key={item.key} data-shop-key={item.key}
+                     className={`shop-card ${maxed ? "owned" : ""}`}>
                   <div className="shop-art">
                     {sp ? (
                       <PlantIcon species={sp} stage={6} size={70} />

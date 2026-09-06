@@ -23,7 +23,6 @@ import ShopPanel from "./ShopPanel";
 import ProfilePanel from "./ProfilePanel";
 import TabBar, { type PanelTab } from "./TabBar";
 import LeagueRail from "./LeagueRail";
-import TodayBrief from "./TodayBrief";
 import DecorBar from "./DecorBar";
 import RestorePanel from "./RestorePanel";
 import ExpandPanel from "./ExpandPanel";
@@ -647,6 +646,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
 
   // one button, four states: each press moves to the next record, then off
   const [musicOpen, setMusicOpen] = useState(false);
+  /** Which shop item to scroll to and flash when the Shop tab opens. */
+  const [shopFocus, setShopFocus] = useState<string | null>(null);
 
   const pickMusic = useCallback((mode: MusicMode | "off") => {
     if (mode === "off") {
@@ -820,7 +821,6 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             */}
             {tab === "garden" && (
               <>
-                <TodayBrief refreshKey={briefKey} />
                 <WeeklyGift refreshKey={briefKey} onState={applyState} showToast={showToast} />
                 <NextStep
                   state={state}
@@ -840,6 +840,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
                   onPlant={(p) => { sfx.click(); setSeedFor(p); }}
                   onClear={clearPlot}
                   onRevive={revivePlot}
+                  onShop={() => { sfx.click(); setShopFocus("tonic"); setTab("shop"); }}
+                  onReminders={() => { sfx.click(); setTab("profile"); }}
                 />
                 <PlotBar
                   state={state}
@@ -856,7 +858,13 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             {tab === "shop" && (
               <>
                 <ExpandPanel state={state} busy={busy} onBreakGround={breakGround} />
-                <ShopPanel state={state} onBought={applyState} showToast={showToast} />
+                <ShopPanel
+                  state={state}
+                  onBought={applyState}
+                  showToast={showToast}
+                  focusKey={shopFocus}
+                  onFocused={() => setShopFocus(null)}
+                />
                 <DecorBar state={state} onState={applyState} showToast={showToast} />
                 <RestorePanel state={state} onState={applyState} showToast={showToast} />
               </>
