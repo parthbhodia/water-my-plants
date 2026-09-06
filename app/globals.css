@@ -1835,7 +1835,11 @@ button { font-family: var(--font); cursor: pointer; }
     width: 100vw; border-radius: 0;
     box-shadow: none;
   }
-  .game-host { aspect-ratio: auto; height: 58dvh; }
+  /* 84vw is the tallest box the camera can fill without cropping more of
+     the garden's width than the design intends (H * 1.35 * vw / W). Left at
+     a flat 58dvh, a portrait phone got a 430x541 box for a 960x600 world and
+     the camera rendered the void below the grass. */
+  .game-host { aspect-ratio: auto; height: min(58dvh, 84vw); }
   .panel-wrap { border-radius: 18px 18px 0 0; }
   /* Bottom-left, never the top: centred at the top it landed squarely on the
      HUD card and buried the garden name and the day's stats. The water

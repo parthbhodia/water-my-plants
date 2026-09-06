@@ -470,9 +470,18 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     const vw = this.scale.width;
     const vh = Math.max(120, this.scale.height - this.bottomInset);
     cam.setViewport(0, 0, vw, vh);
-    // fit the world's WIDTH and show as much height as the strip allows —
-    // on a wide, short phone screen this keeps the whole yard in frame
-    const cover = Math.max(vw / W, Math.min(vh / H, (vw / W) * 1.35));
+    // Cover: zoom enough that the world fills the viewport on BOTH axes.
+    //
+    // This used to fit the width and cap the vertical fit at 1.35x — tuned
+    // for a wide, short LANDSCAPE strip, where it keeps the whole yard in
+    // frame. In portrait the box is taller than it is wide, the cap could
+    // not reach vh/H, and the camera happily rendered 294 rows of world that
+    // do not exist: a pale band of the frame's sky colour under the grass.
+    //
+    // max(fitW, fitH) cannot do that whatever shape the box is, and it
+    // returns the identical zoom in landscape and on desktop, where the
+    // cap was never the binding term.
+    const cover = Math.max(vw / W, vh / H);
     cam.setZoom(cover * this.userZoom);
     if (recenter) cam.centerOn(W / 2, 470);
   }
