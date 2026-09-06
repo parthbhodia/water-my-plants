@@ -5,7 +5,7 @@ import type { Avatar } from "./avatar";
  * The hands-on beats. All three share one shape — walk over, kneel, work,
  * stand — so the garden reads as one place with one pair of hands in it.
  */
-export type RitualKind = "clear" | "harvest" | "sow";
+export type RitualKind = "clear" | "harvest" | "sow" | "break";
 
 // Thin, framework-free bridge between React (state, network) and the Phaser scene.
 export interface SceneApi {
@@ -40,6 +40,8 @@ export class GameBridge {
   onDewBanked: ((dew: number) => void) | null = null;
   onNearPond: ((near: boolean) => void) | null = null;
   onPlotTapped: ((plotIdx: number) => void) | null = null;
+  /** The padlock on the next bed was pressed — show what opens it. */
+  onLockedPlotTapped: (() => void) | null = null;
 
   /** Scene calls this once it's ready */
   ready(api: SceneApi) {

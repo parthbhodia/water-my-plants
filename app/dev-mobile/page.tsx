@@ -12,6 +12,7 @@ import TabBar, { type PanelTab } from "@/components/TabBar";
 import PlotBar from "@/components/PlotBar";
 import PlantCard from "@/components/PlantCard";
 import RestorePanel from "@/components/RestorePanel";
+import ExpandPanel from "@/components/ExpandPanel";
 import NextStep from "@/components/NextStep";
 import WaterFab from "@/components/WaterFab";
 import ProfilePanel from "@/components/ProfilePanel";
@@ -39,6 +40,9 @@ const STATE = {
     { key:"meadow", name:"The Far Meadow", blurb:"Waist-high grass past the fence.", minLevel:6, unlocked:false, fixtures:[] },
   ],
   unlockedSpecies:["lily","sunflower","fern","cactus"], gardenScore:68, completedCount:2,
+  lifetimeEarned: 520, levelFloor: 360, nextLevelAt: 640,
+  nextPlot: { idx:6, cost:600, minLevel:3, kind:"sun" as const,
+              levelOk:true, dewOk:false, dewToGo:150, levelAt:160 },
   plots: KINDS.map((kind, idx) => ({ idx, kind, unlocked: idx<6,
     plant: idx===0 ? mk("lily",0,4,"dewkissed") : idx===1 ? mk("sunflower",1,5,"golden")
          : idx===2 ? mk("fern",2,3) : idx===3 ? mk("cactus",3,2,"variegated") : null })),
@@ -113,6 +117,7 @@ export default function DevMobile() {
                 {/* the tend buttons now live on the card, not the chip row */}
                 <PlantCard state={STATE} selected={sel} busy={false}
                   onTend={(i,a)=>bridge.tend(i,a)} onPlant={()=>setModal("seed")} onClear={()=>{}} onRevive={()=>{}} />
+                <ExpandPanel state={STATE} busy={false} onBreakGround={()=>{}} />
                 <RestorePanel state={STATE} onState={()=>{}} showToast={()=>{}} />
               </>
             )}

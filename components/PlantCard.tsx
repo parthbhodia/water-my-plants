@@ -188,7 +188,7 @@ export default function PlantCard({
     <section className={`plant-card-live t-${tone}`} aria-label={`${sp.name} details`}>
       <header className="pcl-head">
         <span className="pcl-art" aria-hidden>
-          <PlantIcon species={sp.key} stage={plant.stage} size={54} wilted={plant.wilted} />
+          <PlantIcon species={sp.key} stage={plant.stage} size={72} wilted={plant.wilted} />
         </span>
         <div className="pcl-id">
           <b>

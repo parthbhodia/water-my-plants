@@ -180,6 +180,30 @@ begin
     v_out := v_out || 'visit_water=**FAIL:let a player visit themselves** '; procedure_failed := true;
   exception when others then v_out := v_out || 'visit_water=guard(ok) '; end;
 
+  -- Breaking new ground. Funded first, because the interesting failure is
+  -- the one where it runs and silently does nothing, not the one where a
+  -- broke player is refused.
+  begin
+    update wallet set dewdrops = 99999, lifetime_earned = 99999 where user_id = v_uid;
+    declare v_pc_before int; v_pc_after int;
+    begin
+      select plot_count into v_pc_before from gardens where user_id = v_uid;
+      if v_pc_before >= 12 then
+        v_out := v_out || 'break_ground=SKIPPED(garden already full) ';
+      else
+        perform public.break_ground();
+        select plot_count into v_pc_after from gardens where user_id = v_uid;
+        if v_pc_after = v_pc_before + 1 then
+          v_out := v_out || 'break_ground=ok ';
+        else
+          v_out := v_out || '**FAIL:break_ground left plot_count at ' || v_pc_after || '** ';
+          procedure_failed := true;
+        end if;
+      end if;
+    end;
+  exception when others then
+    v_out := v_out || 'break_ground=**FAIL:' || SQLERRM || '** '; procedure_failed := true; end;
+
   -- The seasonal gate, checked against a species that is DEFINITELY out of
   -- phase today whatever the date is: three of the four always are. The gate
   -- sits BEFORE the plot-kind and occupancy checks in plant_seed, so plot 0

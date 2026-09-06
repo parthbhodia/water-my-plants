@@ -83,7 +83,7 @@ export default function ShopPanel({
                 <div key={item.key} className={`shop-card ${maxed ? "owned" : ""}`}>
                   <div className="shop-art">
                     {sp ? (
-                      <PlantIcon species={sp} stage={6} size={50} />
+                      <PlantIcon species={sp} stage={6} size={70} />
                     ) : (
                       (() => {
                         const I = ITEM_ART[item.key as keyof typeof ITEM_ART] ?? Gift;

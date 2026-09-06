@@ -35,7 +35,7 @@ export default function VariantCollection() {
             <div className={`variant-card${has ? " found" : ""}`} key={v.key}>
               <span className="vc-art" aria-hidden>
                 {has
-                  ? <PlantIcon species="lily" stage={6} size={54} variant={v.key} />
+                  ? <PlantIcon species="lily" stage={6} size={72} variant={v.key} />
                   : <Lock size={22} strokeWidth={2.2} />}
               </span>
               <b>{has ? v.name : "???"}</b>

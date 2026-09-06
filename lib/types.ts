@@ -47,6 +47,22 @@ export type ZoneState = {
   fixtures: FixtureState[];
 };
 
+/**
+ * The next bed, priced and gated. Both gates are re-checked server-side in
+ * `break_ground` — these fields only decide what the button says.
+ */
+export type NextPlot = {
+  idx: number;
+  cost: number;
+  minLevel: number;
+  kind: PlotState["kind"];
+  levelOk: boolean;
+  dewOk: boolean;
+  dewToGo: number;
+  /** lifetime dewdrops the required level starts at */
+  levelAt: number;
+};
+
 export type GardenState = {
   gardenId: string;
   gardenName: string;
@@ -67,6 +83,8 @@ export type GardenState = {
   unlockedSpecies: string[];
   /** The server's own reading of the turn of the year, so the UI agrees with it. */
   yearPhase?: YearPhase;
+  /** The next bed that can be bought, or null once the whole garden is theirs. */
+  nextPlot?: NextPlot | null;
   inventory: Record<string, number>;
   decor: Record<string, string>;
   level: number;

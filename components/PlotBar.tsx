@@ -83,7 +83,7 @@ export default function PlotBar({
               )}
               <span className="chip-art">
                 {pl ? (
-                  <PlantIcon species={pl.species} stage={pl.stage} size={52} wilted={pl.wilted} dead={pl.dead} />
+                  <PlantIcon species={pl.species} stage={pl.stage} size={66} wilted={pl.wilted} dead={pl.dead} />
                 ) : (
                   <Plus size={22} strokeWidth={2.4} className="chip-empty" aria-hidden />
                 )}

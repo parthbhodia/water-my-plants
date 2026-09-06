@@ -66,8 +66,12 @@ as $$
   end;
 $$;
 
-revoke execute on function public.is_southern_tz(text) from anon, authenticated;
-revoke execute on function public.year_phase(text, date) from anon, authenticated;
+-- PUBLIC, not anon: every function is granted to PUBLIC by default, so a
+-- revoke naming only `anon` removes a privilege it never had. These two are
+-- internal helpers — SECURITY DEFINER callers run as the owner and keep
+-- their access.
+revoke execute on function public.is_southern_tz(text) from public;
+revoke execute on function public.year_phase(text, date) from public;
 
 -- ------------------------------------------------------------------- species
 alter table public.species

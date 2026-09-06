@@ -321,12 +321,18 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       if (moved > 14) return; // a drag, not a tap
       let best = -1;
       let bestD = 78 * 78;
+      // The padlocked next bed counts as a target too. It has always been
+      // drawn and never been touchable, so the one clear invitation in the
+      // scene to make the garden bigger did nothing when you pressed it.
+      const nextIdx = this.garden?.plotCount ?? -1;
       PLOTS.forEach((pl, i) => {
-        if (!this.plotUnlocked(i)) return;
+        if (!this.plotUnlocked(i) && i !== nextIdx) return;
         const d = (p.worldX - pl.x) ** 2 + (p.worldY - (pl.y - 20)) ** 2;
         if (d < bestD) { bestD = d; best = i; }
       });
-      if (best >= 0) {
+      if (best === nextIdx && !this.plotUnlocked(best)) {
+        this.bridge.onLockedPlotTapped?.();
+      } else if (best >= 0) {
         this.selectPlot(best);
         this.bridge.onPlotTapped?.(best);
       } else {
@@ -2882,6 +2888,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       if (this.reducedMotion) { this.quietRitual(i, kind); return; }
       if (kind === "clear") this.beatsClear(i);
       else if (kind === "harvest") this.beatsHarvest(i);
+      else if (kind === "break") this.beatsBreak(i);
       else this.beatsSow(i);
     };
 
@@ -3166,13 +3173,83 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   }
 
   /**
+   * Breaking new ground on a bed that has never been planted. The longest of
+   * the four, because it is the largest thing a player can buy: this is not
+   * a plant changing state, it is the garden itself getting bigger.
+   *
+   * It borrows the rake from clearing and the ring from sowing, but the
+   * ladder RISES — 131 → 196 → 262 — where clearing's falls. Same hands,
+   * opposite direction, which is the whole reason the grammar is shared.
+   */
+  private beatsBreak(i: number) {
+    const p = PLOTS[i] ?? PLOTS[0];
+
+    // the camera comes along: the new bed is somewhere he has never stood
+    this.focusPlot(i, 1.5);
+
+    this.player.setTexture("g_kneel_0");
+    sfx.take();
+
+    // turning the first sod
+    this.rt(160, () => {
+      sfx.uproot();
+      this.soilPuff(p.x, p.y, 0.7);
+      this.crumbs.explode(12, p.x, p.y + 2);
+    });
+    this.rt(460, () => {
+      this.player.setTexture("g_kneel_1");
+      this.soilPuff(p.x - 10, p.y, 0.55);
+      this.crumbs.explode(10, p.x - 8, p.y + 2);
+      this.tone_break(0);
+    });
+    this.rt(760, () => {
+      this.player.setTexture("g_kneel_0");
+      this.soilPuff(p.x + 12, p.y, 0.55);
+      this.crumbs.explode(10, p.x + 10, p.y + 2);
+      this.tone_break(1);
+    });
+
+    // rake it level, stand up
+    this.rt(1060, () => {
+      this.player.setTexture("g_rake_0");
+      sfx.rake();
+      this.rt(140, () => this.player?.setTexture("g_rake_1"));
+      const sweep = this.add.graphics({ x: p.x, y: p.y + 4 }).setDepth(YARD + p.y - 0.55);
+      sweep.fillStyle(0x6b4a30, 0.45);
+      sweep.fillEllipse(0, 0, 34, 12);
+      this.tweens.add({
+        targets: sweep, scaleX: 2.3, scaleY: 1.3, alpha: 0,
+        duration: 340, ease: "Cubic.easeOut", onComplete: () => sweep.destroy(),
+      });
+    });
+
+    // the bed is real: a green ring, a burst, and the camera eases back out
+    this.rt(1420, () => {
+      this.player.setTexture("g_idle_0");
+      this.tone_break(2);
+      this.soilRing(p.x, p.y, 0x8fe08a, 0.8, 520);
+      this.burstRing(p.x, p.y - 2, 0x8fe08a);
+      this.sparkles.explode(26, p.x, p.y - 20);
+      this.cameraPunch(0.014);
+    });
+    this.rt(1900, () => this.releaseFocus());
+    this.rt(2100, () => this.finishRitual());
+  }
+
+  /** The rising ladder, the inverse of clearing's. Three rungs, one per sod. */
+  private tone_break(step: number) {
+    [sfx.press, sfx.take, sfx.sprout][step]?.call(sfx);
+  }
+
+  /**
    * `prefers-reduced-motion`: the fact still has to land, so it is the same
    * event with the travel taken out — one fade, one sound, no kneeling.
    */
   private quietRitual(i: number, kind: RitualKind) {
     const p = PLOTS[i] ?? PLOTS[0];
-    if (kind === "sow") {
+    if (kind === "sow" || kind === "break") {
       sfx.sprout();
+      if (kind === "break") this.soilRing(p.x, p.y, 0x8fe08a, 0.8, 320);
     } else {
       const ghost = this.takeGhost(i);
       if (kind === "clear") sfx.uproot(); else sfx.snip();

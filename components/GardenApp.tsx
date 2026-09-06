@@ -26,6 +26,7 @@ import LeagueRail from "./LeagueRail";
 import TodayBrief from "./TodayBrief";
 import DecorBar from "./DecorBar";
 import RestorePanel from "./RestorePanel";
+import ExpandPanel from "./ExpandPanel";
 import NextStep from "./NextStep";
 import MusicPicker from "./MusicPicker";
 import GonePlantModal from "./GonePlantModal";
@@ -343,6 +344,12 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
         bridge.tend(i, "water");
       }
     };
+    // the padlock is an invitation; pressing it has to lead somewhere
+    bridge.onLockedPlotTapped = () => {
+      sfx.click();
+      setTab("shop");
+      setSheetOpen(true);
+    };
     bridge.onDewBanked = () => setDewPulse((n) => n + 1);
     bridge.onPourStart = async (plotIdx, action) => {
       if (acting.current) return;
@@ -428,6 +435,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       }
     };
     return () => {
+      bridge.onLockedPlotTapped = null;
       bridge.onPourStart = null;
       bridge.onDewBanked = null;
       bridge.onPlotTapped = null;
@@ -552,6 +560,36 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     },
     [supabase, applyState, showToast, busy, bridge]
   );
+
+  /**
+   * Buy the next bed. The gardener walks out past the fence and digs it, and
+   * the camera goes with him — a plot appearing silently in the corner of a
+   * garden he is not standing in would be the largest thing you can buy
+   * happening entirely off-screen.
+   */
+  const breakGround = useCallback(async () => {
+    const next = stateRef.current?.nextPlot;
+    if (busy || !next) return;
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.rpc("break_ground");
+      if (error) { showToast(error.message, 6000, "worry"); return; }
+      const st = (data as { state: GardenState }).state;
+      applyState(st);
+      sfx.grow();
+      setSelected(next.idx);
+      bridge.select(next.idx);
+      await bridge.ritual("break", next.idx);
+      showToast(
+        `Plot ${next.idx + 1} is yours — dug over and ready for a seed. 🌱`,
+        7000, "proud"
+      );
+    } catch {
+      showToast("Couldn't reach the garden — try that again.", 5600, "worry");
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, supabase, applyState, showToast, bridge]);
 
   const revivePlot = useCallback(
     async (i: number) => {
@@ -817,6 +855,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             )}
             {tab === "shop" && (
               <>
+                <ExpandPanel state={state} busy={busy} onBreakGround={breakGround} />
                 <ShopPanel state={state} onBought={applyState} showToast={showToast} />
                 <DecorBar state={state} onState={applyState} showToast={showToast} />
                 <RestorePanel state={state} onState={applyState} showToast={showToast} />

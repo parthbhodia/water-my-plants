@@ -58,7 +58,7 @@ export default function SeedPicker({
                 onClick={() => ok && onPlant(s.key)}
               >
                 <div className="seed-art">
-                  <PlantIcon species={s} stage={6} size={54} />
+                  <PlantIcon species={s} stage={6} size={76} />
                 </div>
                 <h4>{s.name}</h4>
                 <p className="seed-care">{careSummary(s)}</p>

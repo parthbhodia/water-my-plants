@@ -44,12 +44,12 @@ export default function Hud({
   return (
     <div className="hud-top">
       <div className="hud-card">
-        <div className="hud-day"><Leaf size={16} strokeWidth={2.4} aria-hidden /> {state.gardenName}</div>
+        <div className="hud-day"><Leaf size={19} strokeWidth={2.4} aria-hidden /> {state.gardenName}</div>
         <div className="hud-stage">
           {state.displayName ?? "Gardener"} · {live}/{state.plotCount} plots growing
           {lost > 0 && (
             <span className="hud-lost">
-              <Skull size={12} strokeWidth={2.6} aria-hidden /> {lost} lost
+              <Skull size={16} strokeWidth={2.6} aria-hidden /> {lost} lost
             </span>
           )}
         </div>
@@ -58,9 +58,9 @@ export default function Hud({
             title={lost > 0
               ? `Garden score. ${lost} lost plant${lost === 1 ? "" : "s"} cost you ${lost * 15} points — clear or revive them to stop the drain.`
               : "Garden score — view your league"}>
-            <Trophy size={13} strokeWidth={2.6} aria-hidden /> {state.gardenScore}
+            <Trophy size={18} strokeWidth={2.6} aria-hidden /> {state.gardenScore}
           </button>
-          <span className={`stat dew${dewPulse ? " banked" : ""}`} key={`dew-${dewPulse ?? 0}`} title="Dewdrops"><Droplets size={13} strokeWidth={2.6} aria-hidden /> {state.dewdrops}</span>
+          <span className={`stat dew${dewPulse ? " banked" : ""}`} key={`dew-${dewPulse ?? 0}`} title="Dewdrops"><Droplets size={18} strokeWidth={2.6} aria-hidden /> {state.dewdrops}</span>
           {todo > 0 && <span className="stat todo">{todo} need care</span>}
         </div>
       </div>

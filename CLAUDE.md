@@ -80,6 +80,29 @@ gates on the `is_bloomed` *flag*, not `bloomed_at` (separate columns), and
 Also run `get_advisors` after DDL: it is what caught `anon` being able to
 call `restore_fixture` and `claim_weekly_gift`.
 
+**`revoke execute ... from anon` is a no-op.** Postgres grants EXECUTE on
+every new function to `PUBLIC`, and `anon` inherits from there — it never
+holds a direct grant, so revoking one removes nothing. The revoke has to
+name **`public`**, with anything a signed-in player still needs granted back:
+
+```sql
+revoke execute on function public.thing() from public;
+grant  execute on function public.thing() to authenticated;
+```
+
+Every `revoke ... from anon` line in migrations 0021 and earlier is
+therefore decorative; the advisor still lists those functions, which is why.
+Practically they are all guarded by `if v_uid is null then raise`, so the
+exposure is a rude error rather than a hole — but the grants are not doing
+what the SQL says they are. Check the real answer, never the intent:
+
+```sql
+select has_function_privilege('anon', p.oid, 'execute') …
+```
+
+And note the smoke test **cannot** catch this: it runs as the owner. Testing
+a grant needs `set local role authenticated;` inside the rolled-back block.
+
 ## Testing the UI
 
 The sandbox proxy blocks browser→Supabase, so no logged-in E2E. Instead:
@@ -342,6 +365,32 @@ The rules that keep it fair:
   and CANVAS could not tint one shared speck anyway.
 - Music follows the phase through `music.suggestMode()`, which **never**
   overrides a player who has chosen a record.
+
+## The garden grows: breaking new ground
+
+Every garden shipped at `plot_count = 4` and **nothing had ever raised it**,
+while the scene drew a padlock on plot 5 — a promise the game could not
+keep, shown to every player since launch. `break_ground()` is the other half.
+
+- **Two gates, and they are different on purpose.** Dewdrops are what you
+  spend; gardener level is what you cannot, because it rises with *lifetime*
+  earnings and is never reduced by spending. A hoarder can afford the next
+  bed but still has to have shown up for it.
+- The level is checked **before** the wallet, so failing it never costs a
+  dewdrop, and the wallet row is locked (`select … for update`) like every
+  other spend.
+- `plot_unlocks(idx, cost, min_level)` holds the ladder: 250 → 2400 across
+  plots 5-12, priced against the real earn rate (~4 dewdrops a watering, so
+  ~16/day at four plots and ~48/day at twelve). Each bed you buy shortens
+  the wait for the next, which is the compounding a property should have.
+- `garden_state_json` ships `nextPlot` (or null once the garden is whole —
+  "you have it all" is a state the UI has to render).
+- **The padlock is now tappable** and routes to the Shop tab. It had been
+  drawn and untouchable since launch: the one clear invitation in the scene
+  to make the garden bigger did nothing when pressed.
+- The `"break"` ritual is the fourth of the hands-on beats, and the only one
+  that moves the camera — the new bed is somewhere the gardener has never
+  stood. Its ladder **rises** (131 → 196 → 262) where clearing's falls.
 
 ## Reward beats: every act of care lands
 

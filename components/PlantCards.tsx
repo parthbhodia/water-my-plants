@@ -19,7 +19,7 @@ export default function PlantCards() {
           <Link href={`/plants/${s.key}`} className="plant-card" key={s.key}>
             <span className={`pc-diff d-${diff.toLowerCase()}`}>{diff}</span>
             <span className="pc-art" aria-hidden>
-              <PlantIcon species={s.key} stage={6} size={72} />
+              <PlantIcon species={s.key} stage={6} size={96} />
             </span>
             <b>{s.name}</b>
             <span className="pc-care">{careSummary(s)}</span>

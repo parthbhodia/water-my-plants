@@ -41,7 +41,7 @@ export default function Journal({
               <div key={s.key} className={`stage-card ${unlocked && here ? "" : "locked"}`}>
                 <span className="stage-num">{s.points} pts</span>
                 <div className="art">
-                  <PlantIcon species={s} stage={6} size={72} />
+                  <PlantIcon species={s} stage={6} size={96} />
                 </div>
                 <h4>{s.name}</h4>
                 <p className="seed-care">{careSummary(s)}</p>
