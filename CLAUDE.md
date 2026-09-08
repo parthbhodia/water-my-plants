@@ -637,6 +637,47 @@ and gated in the **database**, not the page.
   gets *numbers*: a gate that refuses everybody passes every negative check
   and is still broken.
 
+### The charts on that page
+
+Four forms, all hand-drawn SVG — no chart library, in keeping with the rest of
+the art here — and all obeying the same rules:
+
+- **The funnel is a Sankey, not a bar list.** A bar list says how many reached
+  each step; it cannot say *where the others went*, and it draws four
+  independent quantities when the point is that they are one stream losing
+  volume. Every person entering on the left leaves through exactly one branch,
+  so the widths are conserved and the biggest gap IS the biggest problem.
+- **Colour does exactly one job per chart.** The Sankey's surviving stream is a
+  validated **ordinal ramp** (blue 250/350/450/550 — monotone lightness,
+  adjacent ΔL ≥ 0.06, single hue, light end 2.06:1 against the page); the
+  drop-offs are a recessive neutral, *not* alarm-red, because leaving is not an
+  error state and three red branches would drown the stream you are meant to
+  follow. The line and bar charts each carry ONE series, so none needs a legend
+  and none may borrow a second hue to look busier.
+- **Labels are selective.** A number on every point is the fastest way to make
+  a 30-day line unreadable: a line labels its peak and its last value, a bar
+  chart labels its peak, and everything else lives in the tooltip and in the
+  table underneath — so nothing is ever gated behind hover.
+- **The hour chart is on the player's own clock**, not UTC
+  (`created_at at time zone profiles.timezone`). The game runs on a frozen
+  local timezone, so a UTC hour is a different question with a similar-looking
+  answer — and this chart is what the nudge send-hour should be argued from.
+- **`generate_series`, never `group by care_date`**, so a day nobody watered is
+  a zero on the chart rather than a missing point the line draws straight
+  through. Retention counts only players who have *existed* that many days, or
+  a week-old cohort looks like it churned on day 13.
+- A chart's top label is drawn above its highest mark, so the viewBox must have
+  headroom: `overflow-x: auto` on the scroll parent computes `overflow-y` to
+  `auto`, not `visible`, and anything painted outside gets clipped.
+
+**`create or replace function` proves nothing.** plpgsql does not parse a body
+until it runs, so a shipped `admin_funnel()` with `left join (…) lh on lh.h = h`
+— ambiguous between the `generate_series` column and `lh.h` — reported success
+and then raised 42702 for every caller. `admin_gate.sql` now asserts the
+*shape* of the document (30 daily / 14 retention / 24 hours), because a broken
+series returns null and the chart renders an empty state that reads as
+"no data yet".
+
 ## Panels: one job per tab
 
 The pull-up sheet had all seven panels stacked under **Garden** and nobody

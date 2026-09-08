@@ -1707,6 +1707,49 @@ button { font-family: var(--font); cursor: pointer; }
 .adm-table thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
 .adm-table tbody tr + tr td { border-top: 1px solid rgba(139,105,62,.16); }
 
+/* ---------- Funnel Sankey (admin) ---------- */
+/* A 4-stage flow needs width to stay legible; on a phone it scrolls inside its
+   own container rather than pushing the page sideways. */
+.adm-scroll-plain { border: 0; background: none; margin-bottom: 14px; }
+.sankey { margin: 0; min-width: 620px; }
+.sankey svg { display: block; width: 100%; height: auto; overflow: visible; }
+.sankey path { transition: opacity .15s ease; }
+.sankey g:hover path { opacity: .95; }
+
+/* Text wears text tokens, never the series colour — a coloured node beside the
+   label is what carries identity. */
+.sk-name { font-size: 13px; font-weight: 800; fill: #0b0b0b; }
+.sk-val  { font-size: 12px; font-weight: 700; fill: #52514e; }
+.sk-pct  { font-size: 11px; font-weight: 700; fill: #898781; }
+.sk-drop { font-size: 11.5px; font-weight: 700; fill: #898781; }
+.adm-empty { color: var(--ink-soft); font-size: .9rem; }
+
+/* ---------- Admin charts ---------- */
+.chart { margin: 0; min-width: 620px; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+/* Text wears text tokens, never the series colour. */
+.ch-tick { font-size: 11px; font-weight: 700; fill: #898781; }
+.ch-val  { font-size: 12px; font-weight: 800; fill: #52514e; }
+.ch-pt { cursor: default; }
+.ch-pt:hover path, .ch-pt:hover rect + path { opacity: 1; }
+.adm-note {
+  margin: -4px 0 10px; font-size: .8rem; color: var(--ink-soft); line-height: 1.5; max-width: 62ch;
+}
+.adm-note em { font-style: italic; }
+
+.rowbars { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.rowbars li {
+  display: grid; grid-template-columns: minmax(96px, 150px) 1fr auto;
+  align-items: center; gap: 12px; font-size: .86rem;
+}
+.rowbars b { font-weight: 700; color: var(--ink); }
+.rb-track { height: 14px; border-radius: 999px; background: rgba(139,105,62,.1); overflow: hidden; }
+.rb-fill { display: block; height: 100%; border-radius: 999px; background: #2a78d6; }
+.rowbars em { font-style: normal; font-weight: 800; color: var(--ink-soft); }
+@media (max-width: 520px) {
+  .rowbars li { grid-template-columns: minmax(84px, 110px) 1fr auto; gap: 8px; font-size: .8rem; }
+}
+
 /* ---------- Seasonal banner ---------- */
 .sb { width: min(1060px, 100%); margin: 0 auto; }
 .sb-stage {

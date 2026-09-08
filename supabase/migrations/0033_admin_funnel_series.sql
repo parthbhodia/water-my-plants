@@ -1,0 +1,5 @@
+-- Superseded by 0034 in the same session: this version had `left join (...) lh
+-- on lh.h = h`, where the bare `h` matched both the generate_series output
+-- column and lh.h, so admin_funnel() raised 42702 at RUN time while
+-- `create or replace function` reported success. Kept so the fix in 0034 has
+-- something to point at. Do not re-apply; 0034 is the live definition.

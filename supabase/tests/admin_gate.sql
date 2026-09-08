@@ -55,13 +55,23 @@ begin
     set local role authenticated;
     v_r := admin_funnel();
     reset role;
-    if v_r->'totals'->>'players' is null then
-      v_out := v_out || ' **FAIL:admin got no totals**';
+    -- Assert the SHAPE, not just that it answered. plpgsql does not parse a
+    -- function body until it runs, so a `create or replace` that "succeeded"
+    -- proves nothing — a broken series silently returns null and the chart
+    -- renders an empty state that looks like "no data yet".
+    if v_r->'totals'->>'players' is null
+       or jsonb_array_length(v_r->'daily') <> 30
+       or jsonb_array_length(v_r->'retention') <> 14
+       or jsonb_array_length(v_r->'hours') <> 24 then
+      v_out := v_out || ' **FAIL:admin got a short document**';
     else
       v_out := v_out || ' admin-reads=ok(players='
              || (v_r->'totals'->>'players')
              || ',cohorts=' || jsonb_array_length(v_r->'cohorts')
-             || ',species=' || jsonb_array_length(v_r->'species') || ')';
+             || ',species=' || jsonb_array_length(v_r->'species')
+             || ',daily=' || jsonb_array_length(v_r->'daily')
+             || ',retention=' || jsonb_array_length(v_r->'retention')
+             || ',hours=' || jsonb_array_length(v_r->'hours') || ')';
     end if;
   exception when others then
     reset role; v_out := v_out || ' **FAIL:admin errored ' || sqlstate || ' ' || sqlerrm || '**';

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import FunnelSankey from "@/components/FunnelSankey";
+import { LineChart, BarChart, RowBars } from "@/components/AdminCharts";
 
 /**
  * The half of the funnel Vercel cannot see.
@@ -35,7 +37,21 @@ type Cohort = {
   watered_2: number; lasted_week: number;
 };
 type Species = { key: string; name: string; planted: number };
-type Funnel = { totals: Totals; cohorts: Cohort[]; species: Species[] };
+type Daily = { day: string; waterings: number; players: number };
+type Retention = { day: number; eligible: number; active: number };
+type Hour = { hour: number; waterings: number };
+type Funnel = {
+  totals: Totals; cohorts: Cohort[]; species: Species[];
+  daily: Daily[]; retention: Retention[]; hours: Hour[];
+};
+
+/** "Sep 8" beats "2026-09-08" on an axis with thirty of them. */
+const shortDay = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric", month: "short", timeZone: "UTC",
+  });
+
+const hourLabel = (h: number) => `${String(h).padStart(2, "0")}`;
 
 const pct = (n: number, of: number) => (of > 0 ? `${Math.round((n / of) * 100)}%` : "—");
 
@@ -56,11 +72,13 @@ export default async function AdminAnalytics() {
     { signed_up: 0, planted: 0, watered_2: 0, lasted_week: 0 }
   );
 
+  // `lost` names the branch that leaves at each split — "left" alone would be
+  // true but useless; which step somebody fell out of IS the finding.
   const steps = [
     { label: "Signed up", n: sum.signed_up },
-    { label: "Planted something", n: sum.planted },
-    { label: "Watered twice", n: sum.watered_2 },
-    { label: "Lasted a week", n: sum.lasted_week },
+    { label: "Planted", n: sum.planted, lost: "never planted" },
+    { label: "Watered twice", n: sum.watered_2, lost: "planted, then stopped" },
+    { label: "Lasted a week", n: sum.lasted_week, lost: "stopped in week one" },
   ];
 
   return (
@@ -80,7 +98,12 @@ export default async function AdminAnalytics() {
         <b><span>{t.active_1d}</span>active today</b>
       </div>
 
-      <h2>Where people stop</h2>
+      <h2>Where people go</h2>
+      <div className="adm-scroll adm-scroll-plain">
+        <FunnelSankey steps={steps} />
+      </div>
+      {/* The bar list stays as the table view: the same numbers, reachable
+          without reading a picture. */}
       <ol className="adm-funnel">
         {steps.map((s) => (
           <li key={s.label}>
@@ -90,6 +113,49 @@ export default async function AdminAnalytics() {
           </li>
         ))}
       </ol>
+
+      <h2>Waterings, last 30 days</h2>
+      <div className="adm-scroll adm-scroll-plain">
+        <LineChart
+          points={(f.daily ?? []).map((d) => ({
+            x: shortDay(d.day),
+            y: d.waterings,
+            hint: `${shortDay(d.day)} · ${d.players} player${d.players === 1 ? "" : "s"}`,
+          }))}
+        />
+      </div>
+
+      <h2>Retention, by day since signing up</h2>
+      <p className="adm-note">
+        Share of players who watered on that day. Only players who have
+        <em> existed</em> that long are counted, or a week-old cohort would look
+        like it churned on day 13.
+      </p>
+      <div className="adm-scroll adm-scroll-plain">
+        <LineChart
+          asPercent
+          points={(f.retention ?? []).map((r) => ({
+            x: `D${r.day}`,
+            y: r.eligible ? Math.round((r.active / r.eligible) * 100) : 0,
+            hint: `Day ${r.day} — ${r.active} of ${r.eligible}`,
+          }))}
+        />
+      </div>
+
+      <h2>When people tend, on their own clock</h2>
+      <p className="adm-note">
+        Local hour, not UTC — the game runs on each player&apos;s frozen
+        timezone, so this is the hour a reminder should be argued from.
+      </p>
+      <div className="adm-scroll adm-scroll-plain">
+        <BarChart
+          bars={(f.hours ?? []).map((h) => ({
+            label: hourLabel(h.hour),
+            value: h.waterings,
+            hint: `${hourLabel(h.hour)}:00 local`,
+          }))}
+        />
+      </div>
 
       <h2>By signup day</h2>
       <div className="adm-scroll">
@@ -112,16 +178,7 @@ export default async function AdminAnalytics() {
       </div>
 
       <h2>What they plant</h2>
-      <div className="adm-scroll">
-        <table className="adm-table">
-          <thead><tr><th>Species</th><th>Times planted</th></tr></thead>
-          <tbody>
-            {f.species.map((s) => (
-              <tr key={s.key}><td>{s.name}</td><td>{s.planted}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <RowBars bars={f.species.map((s) => ({ label: s.name, value: s.planted }))} />
     </main>
   );
 }
