@@ -442,6 +442,37 @@ keep, shown to every player since launch. `break_ground()` is the other half.
   that moves the camera — the new bed is somewhere the gardener has never
   stood. Its ladder **rises** (131 → 196 → 262) where clearing's falls.
 
+## The yard has a path and the beds are planted
+
+The landing-page illustration was better-looking than the game it sells, which
+is the wrong way round. Two things it had that the scene only half had:
+
+- **A path has to go somewhere.** The old one was seven pale stones in a 300px
+  texture in the left corner — a detail, not a route. It now runs the width of
+  the yard along the way the gardener *actually* walks: down from the house
+  gate, then along the near bank of the pond, which is the detour `walkTo`
+  already makes when a straight line would put him in the water. It passes in
+  FRONT of the pond (which spans y 410–526) so the two never contest the same
+  pixels — the pond is depth 8, the path 4.5, and an overlap would simply lose.
+- **The far end may taper, but not below ~16px.** Thinner than that it stops
+  reading as a path going away and starts reading as a stick lying on the
+  grass. One stroke cannot vary its own width, so the taper is per segment.
+- **Beds are underplanted** (`bedCover`), for the same reason the landing-page
+  beds are: bare soil under a single plant reads as a hole cut in the lawn. It
+  covers the rim only — the middle is where the plant stands — and it is
+  deterministic, so a bed does not reshuffle when `paintYearTextures` repaints
+  it for a phase change. **A shade bed's cover is deeper and never flowers**;
+  telling the two kinds apart at a glance is the bed's whole job, so the
+  underplanting has to reinforce that rather than blur it.
+
+**The pond stays dead centre.** The journey illustration puts it right, purely
+for composition — a centred pond splits a picture in half. That is a fact about
+pictures, not about spaces: in the game the gardener circles it, it is reachable
+from every side, and it is the hub the yard is organised around. Moving it would
+relocate water plots 0/4/7 under existing players' lilies, plus the pathfinding
+that clamps him out of the water, plus the pour aiming's pond case. The
+illustration is the one that is wrong here, and it is the cheaper thing to fix.
+
 ## Reward beats: every act of care lands
 
 Nothing a player earns may happen silently.

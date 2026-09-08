@@ -49,6 +49,9 @@ const YARD = 100;
 const DROP_G = 760;
 const POUR_T = 0.4;
 const HX = 152; // house anchor
+// The path runs the width of the yard, passing in FRONT of the pond
+// (which spans y 410..526) so the two never fight for the same pixels.
+const PATH_X = 0, PATH_Y = 396, PATH_W = 960, PATH_H = 200;
 
 /** Plot positions. `kind` mirrors the database's plot_kind(idx) exactly. */
 export const PLOTS: Array<{ x: number; y: number; kind: "sun" | "shade" | "water" }> = [
@@ -607,20 +610,87 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       }
     });
 
-    // ---- stepping-stone path ----
-    this.ctex("path", 300, 150, (c) => {
-      const stones: Array<[number, number, number, number]> = [
-        [40, 18, 17, 7], [78, 36, 15, 6.5], [116, 55, 16, 7], [152, 74, 14, 6],
-        [186, 92, 15, 6.5], [220, 110, 13, 5.5], [252, 127, 12, 5],
+    // ---- the garden path ----
+    // Seven pale stones in the left corner: that was a detail, not a route. A
+    // path has to go somewhere, and this one takes the way the gardener
+    // actually walks — down from the house gate, then along the near bank of
+    // the pond, which is the detour `walkTo` already makes when a straight
+    // line would put him in the water. Painted at PATH_X/PATH_Y in world
+    // coords, under everything that stands in the yard (depth 4.5).
+    this.ctex("path", PATH_W, PATH_H, (c) => {
+      // The centreline, in texture space. Perspective is in the width, not in
+      // the shape: near the camera the track is wide, at the gate it is thin.
+      const route: Array<[number, number]> = [
+        [72, 8], [150, 56], [236, 108], [352, 146], [500, 166],
+        [660, 172], [812, 164], [936, 152],
       ];
-      for (const [sx, sy, srx, sry] of stones) {
-        c.fillStyle = "rgba(30,60,40,0.3)";
-        ell(c, sx + 1.5, sy + 2.5, srx, sry); c.fill();
-        c.fillStyle = rgrad(c, sx - srx * 0.3, sy - sry * 0.5, srx * 1.6, [
-          [0, "#e0d1a8"], [0.6, "#c4b183"], [1, "#a08a5e"]]);
-        ell(c, sx, sy, srx, sry); c.fill();
-        c.fillStyle = "rgba(255,255,255,0.3)";
-        ell(c, sx - srx * 0.25, sy - sry * 0.35, srx * 0.45, sry * 0.4); c.fill();
+      const stroke = (w0: number, w1: number, style: string | CanvasGradient) => {
+        // Taper by segment: one stroke cannot vary its own width.
+        for (let i = 0; i < route.length - 1; i++) {
+          const t = i / (route.length - 2);
+          const [x0, y0] = route[i];
+          const [x1, y1] = route[i + 1];
+          const [xa, ya] = route[Math.max(0, i - 1)];
+          const [xb, yb] = route[Math.min(route.length - 1, i + 2)];
+          c.strokeStyle = style;
+          c.lineWidth = w0 + (w1 - w0) * t;
+          c.lineCap = "round";
+          c.beginPath();
+          c.moveTo(x0, y0);
+          c.bezierCurveTo(
+            x0 + (x1 - xa) / 6, y0 + (y1 - ya) / 6,
+            x1 - (xb - x0) / 6, y1 - (yb - y0) / 6,
+            x1, y1
+          );
+          c.stroke();
+        }
+      };
+
+      // The far end tapers, but only so far: below about 16px it stops reading
+      // as a path going away and starts reading as a stick lying on the grass.
+      stroke(18, 32, "rgba(28,58,38,0.18)");                 // the track's own shade
+      stroke(15, 28, lg(c, 0, 0, 0, PATH_H, [[0, "#cdbd94"], [1, "#e6dbb9"]]));
+      stroke(6, 12, "rgba(255,252,236,0.34)");               // worn, lighter centre
+
+      // Stepping stones laid along it, sized by how near they are.
+      for (let i = 0; i < route.length - 1; i++) {
+        for (const f of [0.25, 0.72]) {
+          const [x0, y0] = route[i];
+          const [x1, y1] = route[i + 1];
+          const sx = x0 + (x1 - x0) * f;
+          const sy = y0 + (y1 - y0) * f;
+          const k = 0.55 + (sy / PATH_H) * 0.95;
+          const srx = 11 * k, sry = 4.6 * k;
+          c.fillStyle = "rgba(30,60,40,0.28)";
+          ell(c, sx + 1.2, sy + 2.2, srx, sry); c.fill();
+          c.fillStyle = rgrad(c, sx - srx * 0.3, sy - sry * 0.5, srx * 1.6, [
+            [0, "#efe4c4"], [0.6, "#cdba8c"], [1, "#a68f61"]]);
+          ell(c, sx, sy, srx, sry); c.fill();
+          c.fillStyle = "rgba(255,255,255,0.3)";
+          ell(c, sx - srx * 0.25, sy - sry * 0.35, srx * 0.45, sry * 0.4); c.fill();
+        }
+      }
+
+      // Grass creeping over both edges, or it reads as a decal on the lawn.
+      c.strokeStyle = "rgba(52,116,66,0.55)";
+      c.lineCap = "round";
+      for (let i = 0; i < route.length - 1; i++) {
+        const t = i / (route.length - 2);
+        const half = (15 + 13 * t) / 2;
+        for (let k = 0; k < 7; k++) {
+          const f = k / 7;
+          const [x0, y0] = route[i];
+          const [x1, y1] = route[i + 1];
+          const sx = x0 + (x1 - x0) * f;
+          const sy = y0 + (y1 - y0) * f;
+          const side = k % 2 ? 1 : -1;
+          const h = 4 + ((k * 7) % 4);
+          c.lineWidth = 1.5;
+          c.beginPath();
+          c.moveTo(sx, sy + side * half);
+          c.lineTo(sx + ((k % 3) - 1) * 2, sy + side * (half + h));
+          c.stroke();
+        }
       }
     });
 
@@ -1300,7 +1370,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
 
     // ground + path
     this.add.image(0, GROUND, "ground").setOrigin(0).setDepth(4);
-    this.add.image(58, 394, "path").setOrigin(0, 0).setDepth(4.5);
+    this.add.image(PATH_X, PATH_Y, "path").setOrigin(0, 0).setDepth(4.5);
 
     // fence
     this.add.image(0, 330, "fence").setOrigin(0, 0).setDepth(6);
@@ -1493,6 +1563,35 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     }
   }
 
+  /**
+   * Low planting around a bed's rim.
+   *
+   * A bare soil ellipse under a single plant reads as a hole cut in the lawn —
+   * the same thing that made the landing-page beds look wrong until they were
+   * underplanted. This softens the rim without touching the middle, where the
+   * plant itself stands, and it is deterministic so a bed does not reshuffle
+   * every time its texture is repainted for a phase change.
+   *
+   * Drawn in the bed's own 100x45 space (the painter has already scaled 2x).
+   */
+  private bedCover(c: Ctx, leaf: string, leafLit: string, bloom: string | null) {
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + ((i * 7) % 5) * 0.12;
+      const r = 0.72 + ((i * 13) % 4) * 0.07;
+      const gx = 50 + Math.cos(a) * 42 * r;
+      const gy = 22 + Math.sin(a) * 14 * r;
+      const h = 4 + ((i * 11) % 3);
+      c.fillStyle = i % 2 ? leaf : leafLit;
+      ell(c, gx, gy - h * 0.3, 3.4, h * 0.62); c.fill();
+      ell(c, gx - 2.6, gy - h * 0.1, 2.2, h * 0.4); c.fill();
+      ell(c, gx + 2.6, gy - h * 0.14, 2.2, h * 0.42); c.fill();
+      if (bloom && i % 4 === 0) {
+        c.fillStyle = bloom;
+        ell(c, gx, gy - h * 0.85, 1.5, 1.5); c.fill();
+      }
+    }
+  }
+
   private buildPlots() {
     // soil beds so a plot's kind is readable at a glance
     this.ctex("bed_sun", 200, 90, (c) => {
@@ -1507,6 +1606,7 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       }
       c.fillStyle = "rgba(255,225,170,0.22)";
       ell(c, 38, 16, 16, 4); c.fill();
+      this.bedCover(c, "#4f9b5d", "#6fb877", "#ffd76e");
     });
     this.ctex("bed_shade", 200, 90, (c) => {
       c.scale(2, 2);
@@ -1521,6 +1621,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       }
       c.fillStyle = "rgba(190,190,175,0.6)";
       ell(c, 26, 26, 4, 2.4); c.fill(); ell(c, 74, 24, 3.4, 2); c.fill();
+      // A shade bed's cover is deeper and does not flower — that is what makes
+      // the two kinds tell apart at a glance, which is the bed's whole job.
+      this.bedCover(c, "#4a8f59", "#6aa872", null);
     });
 
     PLOTS.forEach((pl, i) => {
