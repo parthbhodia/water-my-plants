@@ -131,12 +131,22 @@ for (const d of DEVICES) {
   }
 
   // ---- does the Water button actually water? ----
-  // tap-to-water may have started a pour above; a scene mid-pour correctly
-  // ignores a second request, so wait for it to settle first
-  for (let i = 0; i < 20; i++) {
-    const busy = await page.evaluate(() => window.__lilyProbe?.()?.pouring);
-    if (!busy) break;
-    await page.waitForTimeout(400);
+  // A scene mid-pour correctly ignores a second request, so wait for the tap
+  // above to finish. Polling `pouring` ALONE is a race and this check was only
+  // ever passing on timing: tap-to-water starts a WALK first and pours ~1.3s
+  // later, so `pouring` is false on the very first sample, the loop breaks at
+  // t=0, and the button tap below lands squarely in the pour. A longer walk
+  // across the yard is all it took to expose it.
+  //
+  // Wait for genuinely idle — no walk target AND not pouring — and require it
+  // to hold, so the ~300ms gap between arriving and the first droplet cannot
+  // be mistaken for "done".
+  let calm = 0;
+  for (let i = 0; i < 48; i++) {
+    const s = (await page.evaluate(() => window.__lilyProbe?.())) ?? {};
+    calm = !s.pouring && !s.target ? calm + 1 : 0;
+    if (calm >= 4) break;
+    await page.waitForTimeout(250);
   }
   await page.waitForTimeout(600);
   await page.evaluate(() => window.__sheet(true));

@@ -465,13 +465,36 @@ is the wrong way round. Two things it had that the scene only half had:
   telling the two kinds apart at a glance is the bed's whole job, so the
   underplanting has to reinforce that rather than blur it.
 
-**The pond stays dead centre.** The journey illustration puts it right, purely
-for composition — a centred pond splits a picture in half. That is a fact about
-pictures, not about spaces: in the game the gardener circles it, it is reachable
-from every side, and it is the hub the yard is organised around. Moving it would
-relocate water plots 0/4/7 under existing players' lilies, plus the pathfinding
-that clamps him out of the water, plus the pour aiming's pond case. The
-illustration is the one that is wrong here, and it is the cheaper thing to fix.
+**The pond sits in the near right**, matching the illustration: planting fills
+the left two thirds, the path curves between them. (An earlier note here argued
+for keeping it centred — that was a call about the *game*, and it was overruled
+in favour of the picture. The reasoning is kept below only where it still binds.)
+
+- **Only the COORDINATES moved. No plot changed its kind.** `plot_kind()` is
+  the server's opinion and `plant_seed` checks against it, so re-kinding an
+  index would need a migration *and* would strand every existing plant in a
+  plot of the wrong sort — a sunflower suddenly floating in the pond. Moving a
+  plot is free; changing what it is, is not. The three water plots (0, 4, 7)
+  moved inside the new ellipse; every land plot is clear of it.
+- **`POND_RX`/`POND_RY` did not change.** The `pond` texture is painted at a
+  fixed size and only the centre moves, so shrinking the logical ellipse would
+  leave the gardener walking on painted water.
+- The path's right half had to drop below world y≈558, because that texture is
+  painted **wider and taller than the logical ellipse** — it carries the bank
+  and rim — and at depth 8 it simply covered a path that only cleared POND_RY.
+- Everything else keyed off `POND_X`/`POND_Y` — the walk clamp, the bank
+  detour, the pour aim, the koi, the rocks — follows the constants and needed
+  no edit. That is why they are constants.
+
+**The mobile audit's pour check was passing on timing, not on correctness.**
+Tap-to-water starts a WALK and only pours ~1.3s later, so polling `pouring`
+alone found `false` on the first sample, broke out at t=0, and tapped the
+button squarely into the pour — which the scene correctly ignores. A longer
+walk across the yard was all it took to expose it. It now waits for genuinely
+idle (no walk target AND not pouring) and requires that to *hold*, so the
+~300ms gap between arriving and the first droplet is not mistaken for done.
+
+
 
 ## Reward beats: every act of care lands
 

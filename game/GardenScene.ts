@@ -33,7 +33,13 @@ import {
 const W = 960;
 const H = 600;
 const GROUND = 372;
-const POND_X = 480;
+// The pond sits in the near right, not the middle. A centred pond splits the
+// picture in half, which is why the landing-page illustration moved it — and
+// the game is now the thing that matches the illustration rather than the
+// other way round. POND_RX/RY are unchanged on purpose: the "pond" texture is
+// painted at a fixed size and only the CENTRE moves, so shrinking the logical
+// ellipse would let the gardener walk on painted water.
+const POND_X = 700;
 const POND_Y = 468;
 const POND_RX = 190;
 const POND_RY = 58;
@@ -53,20 +59,33 @@ const HX = 152; // house anchor
 // (which spans y 410..526) so the two never fight for the same pixels.
 const PATH_X = 0, PATH_Y = 396, PATH_W = 960, PATH_H = 200;
 
-/** Plot positions. `kind` mirrors the database's plot_kind(idx) exactly. */
+/**
+ * Plot positions. `kind` mirrors the database's plot_kind(idx) exactly.
+ *
+ * Only the COORDINATES moved when the pond went right; every index keeps the
+ * kind it has always had. That is deliberate and load-bearing: `plot_kind()`
+ * is the server's opinion and `plant_seed` checks against it, so re-kinding an
+ * index would need a migration AND would strand every existing plant in a plot
+ * of the wrong sort — a sunflower suddenly floating in the pond. Moving a plot
+ * is free; changing what it is, is not.
+ *
+ * The three water plots sit inside the pond's ellipse (centre POND_X/POND_Y,
+ * 190x58); every land plot is clear of it, which puts the planting in the left
+ * two thirds and the water in the near right.
+ */
 export const PLOTS: Array<{ x: number; y: number; kind: "sun" | "shade" | "water" }> = [
-  { x: 480, y: 466, kind: "water" },
-  { x: 700, y: 498, kind: "sun" },
-  { x: 215, y: 500, kind: "shade" },
-  { x: 795, y: 470, kind: "sun" },
-  { x: 398, y: 480, kind: "water" },
-  { x: 140, y: 468, kind: "shade" },
-  { x: 645, y: 538, kind: "sun" },
-  { x: 560, y: 474, kind: "water" },
-  { x: 285, y: 538, kind: "shade" },
-  { x: 862, y: 512, kind: "sun" },
-  { x: 745, y: 452, kind: "sun" },
-  { x: 120, y: 538, kind: "shade" },
+  { x: 700, y: 462, kind: "water" },
+  { x: 430, y: 460, kind: "sun" },
+  { x: 196, y: 525, kind: "shade" },
+  { x: 268, y: 444, kind: "sun" },
+  { x: 620, y: 490, kind: "water" },
+  { x: 128, y: 486, kind: "shade" },
+  { x: 452, y: 524, kind: "sun" },
+  { x: 782, y: 480, kind: "water" },
+  { x: 228, y: 566, kind: "shade" },
+  { x: 350, y: 578, kind: "sun" },
+  { x: 330, y: 500, kind: "sun" },
+  { x: 108, y: 556, kind: "shade" },
 ];
 
 // plant sprite canvas: logical box with the plant's base at (PB_X, PB_Y)
@@ -621,8 +640,12 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       // The centreline, in texture space. Perspective is in the width, not in
       // the shape: near the camera the track is wide, at the gate it is thin.
       const route: Array<[number, number]> = [
-        [72, 8], [150, 56], [236, 108], [352, 146], [500, 166],
-        [660, 172], [812, 164], [936, 152],
+        // The right half sits BELOW y≈162 (world 558) because the "pond"
+        // texture is painted wider and taller than the logical ellipse — it
+        // carries the bank and rim — and at depth 8 it simply covers a path
+        // that only cleared POND_RY.
+        [72, 8], [150, 56], [236, 108], [352, 146], [500, 172],
+        [660, 182], [812, 178], [936, 170],
       ];
       const stroke = (w0: number, w1: number, style: string | CanvasGradient) => {
         // Taper by segment: one stroke cannot vary its own width.
