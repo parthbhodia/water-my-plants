@@ -612,6 +612,31 @@ Analytics not enabled, no events table. The back half was recoverable
   reconstructed from `profiles`, `plants` and `care_logs`. Read-only, no
   instrumentation, no new tables.
 
+### Admin-only analytics
+
+`/admin/analytics` is unlisted (`robots: noindex`, in no nav and no sitemap)
+and gated in the **database**, not the page.
+
+- **The RPC refusing IS the authorisation.** `admin_funnel()` is SECURITY
+  DEFINER, raises `42501` for anybody not in `admins`, and is revoked from
+  `anon` entirely. The page has no client-side check and must never grow one;
+  it only decides what to render once the RPC has answered. A non-admin gets a
+  **404, not a 403**, so the page does not advertise that it exists.
+- `is_admin()` is an internal helper, callable by neither `anon` nor
+  `authenticated` — its only caller is `admin_funnel()`, which keeps the
+  owner's access. It is deliberately **not** used in any RLS policy: policies
+  are evaluated as the CALLING user, so a revoked function there would break
+  ordinary table reads.
+- The allow-list is seeded in its own migration (0032), so granting a person
+  access to every player's data is a one-line reviewable change.
+- **`supabase/tests/admin_gate.sql` is the test that matters, and the RPC
+  smoke test cannot replace it** — the smoke test runs as the owner, who
+  passes every grant check and every policy, so a wide-open admin function
+  looks perfectly healthy there. The gate test sets `role authenticated` and
+  impersonates a real admin and a real non-admin. It also asserts the admin
+  gets *numbers*: a gate that refuses everybody passes every negative check
+  and is still broken.
+
 ## Panels: one job per tab
 
 The pull-up sheet had all seven panels stacked under **Garden** and nobody

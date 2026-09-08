@@ -1667,6 +1667,46 @@ button { font-family: var(--font); cursor: pointer; }
   .pc-chips em { font-size: .64rem; padding: 3px 7px; }
 }
 
+/* ---------- Admin funnel (unlisted, admin-gated) ---------- */
+.adm {
+  max-width: 900px; margin: 0 auto; padding: 26px 20px 60px;
+  padding-bottom: max(60px, env(safe-area-inset-bottom));
+}
+.adm h1 { margin: 0 0 4px; font-size: 1.7rem; }
+.adm h2 { margin: 30px 0 10px; font-size: 1.1rem; }
+.adm-sub { margin: 0 0 22px; color: var(--ink-soft); font-size: .9rem; line-height: 1.5; }
+
+.adm-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.adm-tiles b {
+  display: flex; flex-direction: column; gap: 2px; padding: 14px 16px;
+  border-radius: 16px; background: var(--glass); border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 #fff, var(--shadow-md);
+  font-size: .76rem; font-weight: 700; color: var(--ink-soft);
+}
+.adm-tiles b span { font-size: 1.6rem; font-weight: 900; color: var(--ink); line-height: 1.1; }
+
+.adm-funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.adm-funnel li {
+  position: relative; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 13px 15px; border-radius: 14px; overflow: hidden;
+  background: var(--glass); border: 1px solid var(--glass-border);
+  font-size: .9rem;
+}
+/* The bar is the reading; the number confirms it. */
+.adm-funnel .adm-bar {
+  position: absolute; inset: 0 auto 0 0; z-index: 0;
+  background: linear-gradient(90deg, rgba(62,142,82,.26), rgba(62,142,82,.13));
+}
+.adm-funnel b, .adm-funnel em { position: relative; z-index: 1; }
+.adm-funnel em { font-style: normal; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+
+/* Wide rows scroll inside their own container — never the page. */
+.adm-scroll { overflow-x: auto; border-radius: 14px; border: 1px solid var(--glass-border); }
+.adm-table { width: 100%; border-collapse: collapse; background: var(--glass); font-size: .86rem; }
+.adm-table th, .adm-table td { padding: 10px 13px; text-align: left; white-space: nowrap; }
+.adm-table thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+.adm-table tbody tr + tr td { border-top: 1px solid rgba(139,105,62,.16); }
+
 /* ---------- Seasonal banner ---------- */
 .sb { width: min(1060px, 100%); margin: 0 auto; }
 .sb-stage {
