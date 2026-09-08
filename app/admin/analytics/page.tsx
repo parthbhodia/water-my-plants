@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import AdminNav from "@/components/AdminNav";
 import FunnelSankey from "@/components/FunnelSankey";
 import { LineChart, BarChart, RowBars } from "@/components/AdminCharts";
 
@@ -83,6 +84,7 @@ export default async function AdminAnalytics() {
 
   return (
     <main className="adm">
+      <AdminNav />
       <h1>Funnel</h1>
       <p className="adm-sub">
         Everything after the sign-up button. The half before it lives in Vercel

@@ -629,6 +629,27 @@ and gated in the **database**, not the page.
   ordinary table reads.
 - The allow-list is seeded in its own migration (0032), so granting a person
   access to every player's data is a one-line reviewable change.
+- **Getting there and back.** `AdminNav` sits at the top of the page with a
+  route back to `/garden` — these pages are outside both the game and the
+  marketing site, and for an installed PWA the browser's own back button may
+  not exist. The nav carries no authorisation of its own; a nav that decided
+  who may see what would be a second, weaker gate to keep in step with the
+  first.
+- **The Analytics link in the HUD is presentation only.** `GardenApp` asks
+  `select user_id from admins` — RLS is select-own-rows and `anon` has no grant
+  at all, so it returns a row for an admin and nothing for anyone else. A
+  tampered `true` buys a 404, not data. It is `hud-desk`: nobody reads a funnel
+  on a phone and the mobile HUD has no room for a sixth icon.
+- **Do not put the admin link in `SiteNav`.** Those pages are SSG for search,
+  and reading `cookies()` in them would make every plant guide dynamic — a real
+  cost to every visitor for a link one person sees.
+- **The table's own grants matter, not just its policy.** Supabase's
+  `alter default privileges` gave `anon` AND `authenticated` full `arwdDxtm` on
+  `admins`, so it shipped writable by anybody signed in. RLS did refuse a
+  self-grant (verified: 42501), but "nobody can make themselves an admin"
+  should not rest on one policy being present and correct — 0035 revokes `anon`
+  entirely and takes INSERT/UPDATE/DELETE off `authenticated`, keeping only the
+  SELECT the nav check needs.
 - **`supabase/tests/admin_gate.sql` is the test that matters, and the RPC
   smoke test cannot replace it** — the smoke test runs as the owner, who
   passes every grant check and every policy, so a wide-open admin function

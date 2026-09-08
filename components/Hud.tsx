@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import {
   Skull, Leaf, Trophy, Droplets, BookOpen, Palette, CircleHelp, Volume2, VolumeX, LogOut, Music, Music2,
+  ChartNoAxesColumn,
 } from "lucide-react";
 import type { GardenState } from "@/lib/types";
 
@@ -18,6 +20,7 @@ export default function Hud({
   musicName,
   onSignOut,
   dewPulse,
+  isAdmin,
 }: {
   state: GardenState;
   muted: boolean;
@@ -32,6 +35,12 @@ export default function Hud({
   onSignOut: () => void;
   /** Bumped when a reward lands, so the counter can flash. */
   dewPulse?: number;
+  /**
+   * Whether to offer the analytics link at all. This is presentation only —
+   * the page itself is gated by the RPC refusing a non-admin, so a stale or
+   * spoofed `false` hides a link and a spoofed `true` buys a 404.
+   */
+  isAdmin?: boolean;
 }) {
   const live = state.plots.filter((p) => p.plant && !p.plant.dead).length;
   // Each dead plant costs 15 points, which is why the trophy can go negative.
@@ -80,6 +89,13 @@ export default function Hud({
         <button className="hud-icon-btn" onClick={onToggleMute} title={muted ? "Unmute" : "Mute"}>
           {muted ? <VolumeX size={19} strokeWidth={2.2} aria-hidden /> : <Volume2 size={19} strokeWidth={2.2} aria-hidden />}
         </button>
+        {isAdmin && (
+          /* hud-desk: nobody reads a funnel on a phone, and the mobile HUD has
+             no room for a sixth icon. */
+          <Link href="/admin/analytics" className="hud-icon-btn hud-desk" title="Analytics">
+            <ChartNoAxesColumn size={19} strokeWidth={2.2} aria-hidden />
+          </Link>
+        )}
         <button className="hud-icon-btn hud-desk" onClick={onSignOut} title="Sign out"><LogOut size={19} strokeWidth={2.2} aria-hidden /></button>
       </div>
     </div>

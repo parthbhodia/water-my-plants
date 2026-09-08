@@ -631,6 +631,24 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     [supabase, bridge, showToast, avatar]
   );
 
+  /**
+   * Whether to offer the analytics link. RLS on `admins` is select-own-rows and
+   * `anon` has no grant at all, so this returns a row only for a real admin and
+   * leaks nothing to anybody else. Presentation only — /admin/analytics is
+   * gated by `admin_funnel()` refusing a non-admin, not by this flag, so the
+   * worst a tampered `true` buys is a 404.
+   */
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let live = true;
+    supabase
+      .from("admins")
+      .select("user_id")
+      .maybeSingle()
+      .then(({ data }) => { if (live) setIsAdmin(!!data); });
+    return () => { live = false; };
+  }, [supabase]);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     window.location.href = "/";
@@ -728,6 +746,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             musicName={MUSIC_MODES.find((m) => m.key === musicMode)?.name ?? ""}
             onSignOut={signOut}
             dewPulse={dewPulse}
+            isAdmin={isAdmin}
           />
         )}
 

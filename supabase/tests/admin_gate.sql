@@ -20,6 +20,25 @@ begin
   if v_admin is null then raise exception 'TESTRESULT SKIPPED — no admin seeded'; end if;
   if v_other is null then raise exception 'TESTRESULT SKIPPED — need a second user'; end if;
 
+  -- 0. the table surface. Supabase's default privileges hand anon AND
+  --    authenticated full arwdDxtm on every new public table, so `admins`
+  --    shipped writable by anybody signed in; RLS refused it, but that is one
+  --    policy standing between a player and self-granted admin.
+  if has_table_privilege('anon', 'public.admins', 'select')
+     or has_table_privilege('authenticated', 'public.admins', 'insert')
+     or has_table_privilege('authenticated', 'public.admins', 'delete') then
+    v_out := v_out || ' **FAIL:admins table is writable or anon-readable**';
+  else
+    v_out := v_out || ' table-surface=ok';
+  end if;
+  -- ...but SELECT has to stay, or the client cannot ask "am I an admin?" and
+  -- the nav item silently disappears for the person it exists for.
+  if not has_table_privilege('authenticated', 'public.admins', 'select') then
+    v_out := v_out || ' **FAIL:authenticated lost SELECT on admins**';
+  else
+    v_out := v_out || ' auth-select-kept=ok';
+  end if;
+
   -- 1. anon must not reach it at all, and the helper must reach nobody
   if has_function_privilege('anon', 'admin_funnel()', 'execute') then
     v_out := v_out || ' **FAIL:anon can execute admin_funnel**';
