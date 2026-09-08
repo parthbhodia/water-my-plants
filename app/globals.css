@@ -124,7 +124,15 @@ button { font-family: var(--font); cursor: pointer; }
   position: relative;
   overflow: hidden;
 }
-.landing-clouds { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+/* Bounded to the sky above the fold. Spanning the whole page put clouds at
+   4/8/22% of the FULL scroll height, so one drifted behind the day-one/day-
+   ninety panels and showed through the gap between them as a hard white
+   rectangle. overflow:hidden also contains the drift keyframe, which runs out
+   to left:110%. */
+.landing-clouds {
+  position: absolute; top: 0; left: 0; right: 0; height: min(820px, 100svh);
+  overflow: hidden; pointer-events: none; z-index: 0;
+}
 .cloud {
   position: absolute;
   width: 180px; height: 56px;
@@ -1374,22 +1382,34 @@ button { font-family: var(--font); cursor: pointer; }
   display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px;
 }
 .step-card {
+  /* A column, not a centred block of inline boxes: the icon and the step
+     number used to share a text line, which put "STEP 1" against the icon's
+     right edge on every card. */
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
   background: var(--glass); border: 1px solid var(--glass-border);
-  border-radius: var(--radius); padding: 18px 18px 16px; text-align: center;
+  border-radius: var(--radius); padding: 22px 20px 20px; text-align: center;
   box-shadow: inset 0 1px 0 #fff, var(--shadow-md);
 }
 .step-icon {
-  display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 16px;
+  position: relative; flex: none;
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px;
   background: linear-gradient(180deg, #eaf7ec, #cfe9d6); color: var(--leaf-deep);
   border: 1px solid rgba(62,142,82,.3);
   box-shadow: inset 0 1px 0 #fff, 0 4px 8px -4px rgba(31,61,45,.3);
 }
 .step-n {
-  display: inline-block; margin-top: 6px; font-size: 0.68rem; font-weight: 900;
-  letter-spacing: 0.1em; text-transform: uppercase; color: var(--leaf-deep);
+  position: absolute; top: -7px; right: -7px;
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  font-style: normal; font-size: 0.72rem; font-weight: 900; line-height: 1;
+  color: #fff; background: var(--leaf-deep);
+  border: 2px solid var(--glass);
+  box-shadow: 0 2px 5px -2px rgba(31,61,45,.6);
 }
-.step-card h3 { margin: 4px 0 6px; font-size: 1.05rem; }
-.step-card p { margin: 0; font-size: 0.86rem; color: var(--ink-soft); line-height: 1.5; }
+.step-card h3 { margin: 0; font-size: 1.06rem; text-wrap: balance; }
+.step-card p {
+  margin: 0; font-size: 0.88rem; color: var(--ink-soft); line-height: 1.5;
+  max-width: 26ch; text-wrap: balance;
+}
 
 .table-scroll { overflow-x: auto; border-radius: var(--radius); box-shadow: var(--shadow-md); }
 .plant-table {
@@ -1574,17 +1594,17 @@ button { font-family: var(--font); cursor: pointer; }
 .restore-meta span { font-size: .72rem; color: var(--ink-soft); line-height: 1.3; }
 .restore-done { font-weight: 900; color: var(--leaf-deep); font-size: 1.1rem; }
 
-/* ---------- Plant cards (homepage) ---------- */
+/* ---------- Plant picker (homepage) ---------- */
 .plant-cards {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px; width: min(1080px, 100%); margin: 0 auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: 14px; width: min(1080px, 100%); margin: 0 auto;
 }
 .plant-card {
-  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px;
   text-decoration: none; color: var(--ink); text-align: center;
-  background: linear-gradient(180deg, #fffdf6, #f2ecdb);
-  border: 2px solid rgba(139,105,62,.25); border-radius: 18px;
-  padding: 16px 12px 12px;
+  background: linear-gradient(180deg, #fffdf6, #f4eede);
+  border: 2px solid rgba(139,105,62,.25); border-radius: 20px;
+  padding: 34px 14px 14px;
   box-shadow: inset 0 1px 0 #fff, 0 4px 0 rgba(190,178,145,.45), 0 14px 22px -12px rgba(31,61,45,.4);
   transition: transform .16s ease, box-shadow .16s ease;
 }
@@ -1592,25 +1612,60 @@ button { font-family: var(--font); cursor: pointer; }
   transform: translateY(-4px);
   box-shadow: inset 0 1px 0 #fff, 0 6px 0 rgba(190,178,145,.5), 0 22px 30px -14px rgba(31,61,45,.5);
 }
-.plant-card b { font-size: .95rem; }
-.pc-art { display: flex; filter: drop-shadow(0 6px 6px rgba(31,61,45,.22)); }
-.pc-care { font-size: .74rem; font-weight: 700; color: var(--leaf-deep); line-height: 1.35; min-height: 2em; }
-.pc-foot {
-  display: flex; justify-content: center; gap: 10px; margin-top: 4px;
-  font-size: .7rem; font-weight: 700; color: var(--ink-soft);
+/* Every plant is painted into the same 150-unit box on a shared baseline, so a
+   fixed frame keeps a snowdrop and a sunflower standing on the same ground
+   instead of floating at different heights across the grid. */
+.pc-art {
+  display: flex; align-items: flex-end; justify-content: center;
+  height: 104px; margin-bottom: 2px;
+  filter: drop-shadow(0 6px 6px rgba(31,61,45,.22));
 }
-.pc-foot em { font-style: normal; }
-.pc-pts { color: var(--clay); }
+.plant-card b { font-size: 1rem; line-height: 1.25; }
+.pc-line {
+  font-size: .8rem; font-weight: 600; color: var(--ink-soft); line-height: 1.45;
+  text-wrap: balance; margin-bottom: 2px;
+}
+.pc-chips {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin-top: auto;
+  padding-top: 8px;
+}
+.pc-chips em {
+  font-style: normal; font-size: .68rem; font-weight: 800; letter-spacing: .01em;
+  color: var(--leaf-deep); background: rgba(62,142,82,.11);
+  border: 1px solid rgba(62,142,82,.22); border-radius: 999px; padding: 3px 8px;
+}
+.pc-chips .pc-more { color: var(--ink-soft); background: rgba(139,105,62,.1); border-color: rgba(139,105,62,.22); }
+.pc-season {
+  font-size: .64rem; font-weight: 900; letter-spacing: .07em; text-transform: uppercase;
+  padding: 2px 9px; border-radius: 999px; border: 1px solid transparent;
+}
+.pc-season.p-spring { color: #a8447c; background: rgba(230,140,190,.16); border-color: rgba(200,110,165,.35); }
+.pc-season.p-summer { color: #9a7413; background: rgba(240,190,60,.18); border-color: rgba(200,160,40,.35); }
+.pc-season.p-autumn { color: #b2521f; background: rgba(230,140,60,.16); border-color: rgba(200,110,50,.35); }
+.pc-season.p-winter { color: #3a72a3; background: rgba(120,180,230,.18); border-color: rgba(90,150,205,.35); }
 .pc-diff {
-  position: absolute; top: 9px; right: 10px;
+  position: absolute; top: 10px; left: 10px;
   font-size: .6rem; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
-  padding: 2px 8px; border-radius: 999px;
-  background: rgba(255,255,255,.75); border: 1px solid rgba(139,105,62,.25); color: var(--ink-soft);
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(255,255,255,.8); border: 1px solid rgba(139,105,62,.25); color: var(--ink-soft);
 }
-.pc-diff.d-beginner { color: #2f7c46; border-color: rgba(62,142,82,.4); }
+.pc-diff.d-beginner { color: #2f7c46; border-color: rgba(62,142,82,.45); background: rgba(214,240,220,.85); }
 .pc-diff.d-steady { color: #a8791f; border-color: rgba(200,150,50,.4); }
 .pc-diff.d-demanding { color: #b25a2a; border-color: rgba(190,100,50,.4); }
 .pc-diff.d-expert { color: #a03a5e; border-color: rgba(170,60,100,.4); }
+
+/* Twelve full-width cards is a 7000px scroll on a phone, which nobody
+   finishes. Two up halves it and still leaves 154px of content per card, so
+   the 104px plant art never has to shrink. */
+@media (max-width: 620px) {
+  .plant-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .plant-card { padding: 30px 10px 12px; border-radius: 18px; }
+  .pc-diff { top: 8px; left: 8px; font-size: .55rem; padding: 3px 7px; }
+  .plant-card b { font-size: .92rem; }
+  .pc-line { font-size: .75rem; }
+  .pc-chips { gap: 4px; padding-top: 7px; }
+  .pc-chips em { font-size: .64rem; padding: 3px 7px; }
+}
 
 /* ---------- Landing page: playable hero, week strip, pledge ---------- */
 .hero-garden {

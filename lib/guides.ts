@@ -14,8 +14,41 @@ export type SpeciesGuide = {
   body: string[];
   /** Short, scannable do/don't pairs. */
   tips: string[];
-  difficulty: "Beginner" | "Steady" | "Demanding" | "Expert";
+  difficulty: Difficulty;
 };
+
+export type Difficulty = "Beginner" | "Steady" | "Demanding" | "Expert";
+
+/**
+ * The one-line pitch on the landing page's plant picker.
+ *
+ * The picker used to print `careSummary()` — "Daily · sunny plot · feed ×3" —
+ * under every plant, which is a specification, not an invitation. It told a
+ * visitor who had never planted anything that all twelve of these would want
+ * something from them, and gave no reason to want any particular one. These
+ * lines say what the plant is *like*; the schedule is still there, demoted to
+ * a chip, where somebody comparing two plants can find it.
+ *
+ * Every species has an entry, including the four seasonals, which have no
+ * long-form guide yet and were rendering an empty difficulty pill.
+ */
+export const PITCH: Record<string, { line: string; difficulty: Difficulty }> = {
+  lily: { line: "The one to start with. No clock, no fuss.", difficulty: "Beginner" },
+  sunflower: { line: "Drinks in daylight, and is asleep by eight.", difficulty: "Beginner" },
+  fern: { line: "Every other day, and keep her out of the sun.", difficulty: "Steady" },
+  lavender: { line: "Dry, stony and sun-baked. Do not fuss over her.", difficulty: "Steady" },
+  snowdrop: { line: "Flowers in the cold, while nothing else dares.", difficulty: "Steady" },
+  cactus: { line: "The one you can kill with kindness.", difficulty: "Steady" },
+  moonflower: { line: "Opens after dark. A night-shift plant.", difficulty: "Steady" },
+  tomato: { line: "Water her and feed her, three times over.", difficulty: "Demanding" },
+  pumpkin: { line: "She eats, and eats, and eats.", difficulty: "Demanding" },
+  blossom: { line: "One cut, while she is bare. Get it wrong and you have lost the year.", difficulty: "Demanding" },
+  orchid: { line: "Shade, patience, and four feedings.", difficulty: "Expert" },
+  bonsai: { line: "A month of care and four careful cuts.", difficulty: "Expert" },
+};
+
+/** Easiest first — the picker is answering "where do I start?". */
+export const PITCH_ORDER: Difficulty[] = ["Beginner", "Steady", "Demanding", "Expert"];
 
 export const GUIDES: SpeciesGuide[] = [
   {

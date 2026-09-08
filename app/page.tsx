@@ -110,6 +110,8 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      <GrowthJourney />
+
       <section className="lp-section" id="how">
         <Reveal>
           <h2>Three steps, then a minute a day</h2>
@@ -119,15 +121,14 @@ export default async function LandingPage() {
 
       <section className="lp-section" id="plants">
         <Reveal>
-          <h2>Every plant wants something different</h2>
+          <h2>Pick a plant that suits your day</h2>
           <p className="lp-sub">
-            Tap any card for its <Link href="/plants">full guide</Link>.
+            A lily forgives a late night; a ghost orchid does not. Easiest
+            first — tap any card for its <Link href="/plants">full guide</Link>.
           </p>
         </Reveal>
         <PlantCards />
       </section>
-
-      <GrowthJourney />
 
       <Showcase />
 
