@@ -12,6 +12,7 @@ import { Reveal } from "@/components/motion/Reveal";
 import { ParallaxLayer } from "@/components/motion/Parallax";
 import Showcase from "@/components/Showcase";
 import GrowthJourney from "@/components/GrowthJourney";
+import SeasonalBanner from "@/components/SeasonalBanner";
 import PlantCards from "@/components/PlantCards";
 import FaqList from "@/components/FaqList";
 import SiteFooter from "@/components/SiteFooter";
@@ -128,6 +129,18 @@ export default async function LandingPage() {
           </p>
         </Reveal>
         <PlantCards />
+      </section>
+
+      <section className="lp-section" id="seasons">
+        <Reveal>
+          <h2>Four plants the calendar decides</h2>
+          <p className="lp-sub">
+            Blossom in spring, lavender in summer, pumpkins in autumn,
+            snowdrops in winter. They cost nothing — you just have to be there
+            when they come round.
+          </p>
+        </Reveal>
+        <SeasonalBanner />
       </section>
 
       <Showcase />

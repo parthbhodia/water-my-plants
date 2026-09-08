@@ -557,6 +557,30 @@ the composition differs in kind:
   speck in a 420x300 frame, and scaling it also has to lift the row, since
   plants grow downward from their baseline and it fell off the bottom edge.
 
+### The seasonal banner
+
+`components/SeasonalBanner.tsx` is the four calendar plants shown in the
+weather that lets you sow them — the picker above can only say "Spring only"
+in a chip, which undersells the one genuinely nice thing about them.
+
+- It paints from the **same `PHASE_PALETTE` the real scene uses**, so a spring
+  banner cannot drift from what a spring garden actually looks like in game.
+- **The seasons melt, they do not cut.** Every palette colour is interpolated
+  across the handover and the outgoing plant fades down as the incoming one
+  grows in. Four cuts read as four pictures; the melt reads as one garden with
+  a year going past, which is the whole point.
+- **Last season's weather has to be cleared, not left to fall.** A petal takes
+  nine seconds to cross the frame, so spring was still snowing pink through
+  autumn. Wrong-kind drops fade out over ~600ms.
+- Summer's palette has `drift: null` — the scene has nothing falling in
+  summer — but a still summer beside three moving seasons looks broken, so the
+  banner gives it golden pollen motes that rise instead of fall. Same reason
+  `BLOOM` exists: the palette leaves `flower` null for spring and summer.
+- `prefers-reduced-motion` keeps the pictures and the tabs and drops the loop,
+  the drift and the auto-advance.
+- On a phone the caption moves **below** the canvas. Overlaid on a 5:3 frame it
+  covered the sky and most of the treeline.
+
 ## Panels: one job per tab
 
 The pull-up sheet had all seven panels stacked under **Garden** and nobody
