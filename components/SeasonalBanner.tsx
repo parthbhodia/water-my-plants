@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SPECIES_BY_KEY } from "@/lib/species";
 import { PITCH } from "@/lib/guides";
+import { seasonPicked } from "@/lib/analytics";
 import { PHASE_NAME, PHASE_PALETTE, type YearPhase } from "@/lib/yearphase";
 import { drawPlant, bloomScale } from "@/game/plants";
 import { lg } from "@/game/draw";
@@ -387,7 +388,7 @@ export default function SeasonalBanner() {
             role="tab"
             aria-selected={i === idx}
             className={`sb-tab t-${p}${i === idx ? " on" : ""}`}
-            onClick={() => { setIdx(i); held.current = 0; }}
+            onClick={() => { setIdx(i); held.current = 0; seasonPicked(p); }}
           >
             {PHASE_NAME[p]}
           </button>

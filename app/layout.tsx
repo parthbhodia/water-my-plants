@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Patrick_Hand } from "next/font/google";
 import "./globals.css";
 import PwaSetup from "@/components/PwaSetup";
+import { Analytics } from "@vercel/analytics/next";
 
 const hand = Patrick_Hand({ weight: "400", subsets: ["latin"], variable: "--font-hand" });
 import { SITE_NAME, SITE_URL } from "@/lib/site";
@@ -80,6 +81,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <PwaSetup />
+        {/* Cookieless, so no consent banner — and it stays that way only while
+            nothing sent from lib/analytics.ts carries personal data. */}
+        <Analytics />
       </body>
     </html>
   );

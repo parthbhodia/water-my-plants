@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import SectionMark from "./SectionMark";
 import { ArrowRight } from "lucide-react";
 import { paintGardenCard, type CardPlant } from "@/game/scenecard";
 
@@ -83,6 +84,7 @@ function Vignette({
 export default function GrowthJourney() {
   return (
     <section className="lp-section gj" id="journey">
+      <SectionMark section="journey" />
       <h2>Day one, and day ninety</h2>
       <p className="lp-sub">
         The same garden. The only thing in between is turning up for a minute a day.

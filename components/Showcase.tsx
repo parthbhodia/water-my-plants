@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import type { ShowcaseGarden } from "@/lib/types";
 import GardenCard from "./GardenCard";
+import SectionMark from "./SectionMark";
 
 /** Real gardens on the landing page — proof rather than promise. */
 export default function Showcase() {
@@ -20,6 +21,7 @@ export default function Showcase() {
 
   return (
     <section className="showcase">
+      <SectionMark section="showcase" />
       <h2>Gardens growing right now</h2>
       <p className="showcase-sub">
         Every one of these belongs to a real gardener who showed up day after day.

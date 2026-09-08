@@ -581,6 +581,37 @@ in a chip, which undersells the one genuinely nice thing about them.
 - On a phone the caption moves **below** the canvas. Overlaid on a 5:3 frame it
   covered the sky and most of the treeline.
 
+## Funnel analytics
+
+The landing page had been rebuilt several times with **no way to tell whether
+any of it worked** — no analytics package, nothing in the layout, Vercel Web
+Analytics not enabled, no events table. The back half was recoverable
+(everything carries `created_at`) but had never been queried.
+
+- **Front half — Vercel Web Analytics.** `<Analytics />` in `app/layout.tsx`.
+  It is cookieless and needs no consent banner, **and it stays that way only
+  while nothing sent from `lib/analytics.ts` carries personal data.** Never
+  pass an email, display name or user id; every payload is a bounded set of
+  literals chosen in advance (which section, which species key, which season).
+  That rule is the reason the file exists instead of `track()` being called
+  ad hoc from a dozen components. **It requires the toggle in the Vercel
+  dashboard** — without it the script 404s and every event is dropped.
+- **Events sent before the beacon exists must be buffered.** `track()` hands
+  off to `window.va`, which `<Analytics>` installs from its own effect, and
+  effects run parent-last — so the FIRST section on the page marks itself
+  before the beacon is there and the event vanishes with no error. That lost
+  the hero view, which every visitor triggers, and would have made the top of
+  the funnel look emptier than the sections below it. `send()` queues and
+  flushes once `window.va` appears.
+- **`SectionMark` tests overlap with the middle half of the viewport**
+  (`rootMargin: -25%`), not a threshold fraction: `#plants` is over 2000px
+  tall and 40% of it never fits on an 844px phone, so a threshold would have
+  made the tallest sections look like the ones nobody reaches. It disconnects
+  on the first hit, or scrolling back up would re-fire it.
+- **Back half — `supabase/queries/funnel.sql`.** Activation and retention
+  reconstructed from `profiles`, `plants` and `care_logs`. Read-only, no
+  instrumentation, no new tables.
+
 ## Panels: one job per tab
 
 The pull-up sheet had all seven panels stacked under **Garden** and nobody

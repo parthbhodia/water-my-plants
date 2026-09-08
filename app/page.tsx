@@ -13,6 +13,7 @@ import { ParallaxLayer } from "@/components/motion/Parallax";
 import Showcase from "@/components/Showcase";
 import GrowthJourney from "@/components/GrowthJourney";
 import SeasonalBanner from "@/components/SeasonalBanner";
+import SectionMark from "@/components/SectionMark";
 import PlantCards from "@/components/PlantCards";
 import FaqList from "@/components/FaqList";
 import SiteFooter from "@/components/SiteFooter";
@@ -90,6 +91,7 @@ export default async function LandingPage() {
       </ParallaxLayer>
 
       <section className="hero" id="play">
+        <SectionMark section="hero" />
         <div className="hero-copy">
           <p className="eyebrow">Free · no adverts · plays in your browser</p>
           <h1>
@@ -114,6 +116,7 @@ export default async function LandingPage() {
       <GrowthJourney />
 
       <section className="lp-section" id="how">
+        <SectionMark section="how" />
         <Reveal>
           <h2>Three steps, then a minute a day</h2>
         </Reveal>
@@ -121,6 +124,7 @@ export default async function LandingPage() {
       </section>
 
       <section className="lp-section" id="plants">
+        <SectionMark section="plants" />
         <Reveal>
           <h2>Pick a plant that suits your day</h2>
           <p className="lp-sub">
@@ -132,6 +136,7 @@ export default async function LandingPage() {
       </section>
 
       <section className="lp-section" id="seasons">
+        <SectionMark section="seasons" />
         <Reveal>
           <h2>Four plants the calendar decides</h2>
           <p className="lp-sub">
@@ -146,6 +151,7 @@ export default async function LandingPage() {
       <Showcase />
 
       <section className="lp-section" id="week">
+        <SectionMark section="week" />
         <Reveal>
           <h2>A week in your garden</h2>
         </Reveal>
@@ -153,6 +159,7 @@ export default async function LandingPage() {
       </section>
 
       <section className="lp-section" id="faq">
+        <SectionMark section="faq" />
         <Reveal>
           <h2>Questions, answered</h2>
         </Reveal>

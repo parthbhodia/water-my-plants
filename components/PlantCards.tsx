@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SPECIES, type SpeciesDef } from "@/lib/species";
 import { PITCH, PITCH_ORDER } from "@/lib/guides";
 import { PHASE_NAME } from "@/lib/yearphase";
+import { plantOpened } from "@/lib/analytics";
 import PlantIcon from "./PlantIcon";
 
 /**
@@ -63,7 +64,12 @@ export default function PlantCards() {
         const diff = pitch?.difficulty ?? "Steady";
         const more = extras(s);
         return (
-          <Link href={`/plants/${s.key}`} className="plant-card" key={s.key}>
+          <Link
+            href={`/plants/${s.key}`}
+            className="plant-card"
+            key={s.key}
+            onClick={() => plantOpened(s.key)}
+          >
             <span className={`pc-diff d-${diff.toLowerCase()}`}>{diff}</span>
 
             <span className="pc-art" aria-hidden>

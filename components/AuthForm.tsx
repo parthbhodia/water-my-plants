@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { authResult, authSubmit } from "@/lib/analytics";
 
 type Mode = "signin" | "signup";
 
@@ -21,6 +22,8 @@ export default function AuthForm() {
     setBusy(true);
     setError(null);
     setNote(null);
+    // Mode only. The address typed into this form never leaves it.
+    authSubmit(mode);
 
     const timezone =
       Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -58,7 +61,9 @@ export default function AuthForm() {
         router.push("/garden");
         router.refresh();
       }
+      authResult(mode, true);
     } catch (err) {
+      authResult(mode, false);
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setBusy(false);
