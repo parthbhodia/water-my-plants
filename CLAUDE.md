@@ -895,6 +895,29 @@ So:
   ever *suggest*; a row is never authorisation. Deliberately not league
   rivals — being ranked beside somebody is not an introduction.
 
+Three arms, and each one is **copied from the live body of the thing it
+mirrors**, never approximated:
+
+| arm | predicate | mirrors |
+|---|---|---|
+| neighbour | a `friendships` row either way | `add_friend` |
+| showcase | `garden_value(host) > 0` | `get_showcase` |
+| Hall of Fame | `lifetime_blooms > 0`, `best_streak > 0`, `lifetime_earned > 0` | `get_hall_of_fame`'s four boards |
+
+The showcase arm shipped in 0036 as `exists (a living, undead plant)`, which
+is strictly NARROWER than the real rule: `garden_value` counts harvest points,
+so a player who bloomed their whole garden and gathered it is on the showcase
+with nothing currently growing. That guess excluded exactly the people who
+have finished something. **`get_showcase` and `get_hall_of_fame` were applied
+remotely and exist in this repo only as comments in 0011** — read them with
+`pg_get_functiondef` before touching the guest list, or you will approximate
+them again.
+
+`get_hall_of_fame` ships a `uid` per row, but only when that garden is
+currently visitable. A board must never advertise a door `enter_garden` is
+about to refuse — `Leaderboard.tsx` draws a row as a button when `uid` is
+present and as plain text when it is not, so a dead control is impossible.
+
 ### The `applyState` inversion
 
 `applyState` is the single place that can notice your level going up, so every
@@ -957,6 +980,28 @@ smoke test cannot replace it — the smoke test runs as the owner, who passes
 every grant check, so a `garden_view_json` left callable by `authenticated`
 (handing any garden to anyone who knows a uuid, skipping `visitable`
 entirely) looks perfectly healthy there.
+
+### A test may not choose its actor by luck
+
+Both tests picked the user they impersonate with `select id from profiles
+limit 1` — no `ORDER BY`, so whichever row the planner happened to return.
+On live data that landed on the only player with a garden, and **from that
+seat nobody else is visitable**: `visitable-list` reported 0 and
+`enter_garden_real` skipped, for two rounds, while the code was entirely
+correct. An arbitrary actor makes a test that reports the actor's luck
+instead of the code's behaviour.
+
+Both now select a `(viewer, host)` pair that exercises the feature if one
+exists at all, and say so plainly when none does. The smoke test borrows a
+viewer just for that one check and puts the impersonation back afterwards —
+including from its exception handler, or every later check silently runs as
+somebody else.
+
+And `visit_gate` now asserts the **positive** path outright: 12 plots,
+`dewdrops` zeroed, `friendCode` null, `unlockedSpecies` empty, `hostUid`
+correct. Every other check in that file is a refusal, and a gate that refuses
+everybody passes all of them while being broken — the same reason
+`admin_gate.sql` asserts the admin gets *numbers*.
 
 ## Guiding a lost player
 
