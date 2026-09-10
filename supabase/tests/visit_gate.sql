@@ -13,7 +13,8 @@
 
 do $$
 declare
-  v_a uuid; v_b uuid; v_out text := ''; v_doc jsonb; v_n int;
+  v_a uuid; v_b uuid; v_open uuid; v_closed uuid;
+  v_out text := ''; v_doc jsonb; v_n int;
 begin
   -- Preconditions first, and the table one BEFORE any has_table_privilege
   -- call: that function raises 42P01 on a relation that does not exist, so
@@ -27,10 +28,39 @@ begin
     raise exception 'TESTRESULT SKIPPED — 0036 table exists but enter_garden does not';
   end if;
 
-  select id into v_a from profiles limit 1;
-  select id into v_b from profiles where id <> v_a limit 1;
-  if v_a is null or v_b is null then
-    raise exception 'TESTRESULT SKIPPED — need two profiles to test with';
+  -- Choose the viewer DELIBERATELY.
+  --
+  -- This used to be `select id from profiles limit 1` with no ORDER BY, so it
+  -- got whichever row the planner felt like — and on live data that landed on
+  -- the ONLY player with a garden. From that seat nobody else is visitable, so
+  -- the guest list came back empty and the positive path never ran, while the
+  -- code was perfectly correct. An arbitrary actor makes a test that reports
+  -- the actor's luck instead of the code's behaviour.
+  --
+  -- So: find a pair that actually exercises the feature, if one exists at all.
+  select a.id, b.id into v_a, v_open
+  from profiles a
+  join profiles b on b.id <> a.id
+  where visitable(a.id, b.id)
+  order by a.id, b.id
+  limit 1;
+
+  if v_a is null then
+    -- Nobody can visit anybody. The negative checks below still mean
+    -- something, so run them — but say plainly that the positive half did not.
+    select id into v_a from profiles order by id limit 1;
+    v_out := v_out || ' positive-path=SKIPPED(no visitable pair exists)';
+  end if;
+
+  -- A host the viewer may NOT visit, for the closed-gate check. Deliberately
+  -- separate from v_open: one variable serving both roles is how that check
+  -- quietly turned into "skipped" whenever the pair happened to be open.
+  select id into v_closed from profiles
+   where id <> v_a and not visitable(v_a, id)
+   order by id limit 1;
+
+  if v_a is null then
+    raise exception 'TESTRESULT SKIPPED — need at least one profile to test with';
   end if;
 
   -- 0. The table surface. Supabase's `alter default privileges` hands anon
@@ -108,35 +138,69 @@ begin
   --     success and then raised 42702 for every caller.
   begin
     v_doc := public.get_visitable();
-    if jsonb_typeof(v_doc) = 'array' then
-      v_out := v_out || ' visitable-list=ok(' || jsonb_array_length(v_doc) || ')';
-    else
+    if jsonb_typeof(v_doc) <> 'array' then
       v_out := v_out || ' **FAIL:get_visitable is not an array**';
+    elsif v_open is not null and jsonb_array_length(v_doc) = 0 then
+      -- We PROVED a visitable pair exists before impersonating, so an empty
+      -- list here is get_visitable disagreeing with visitable() — exactly the
+      -- drift the single-guest-list rule exists to prevent.
+      v_out := v_out || ' **FAIL:get_visitable is empty but a visitable host exists**';
+    else
+      v_out := v_out || ' visitable-list=ok(' || jsonb_array_length(v_doc) || ')';
     end if;
   exception when others then
     v_out := v_out || ' **FAIL:get_visitable ' || SQLERRM || '**';
   end;
 
+  -- 3c2. THE POSITIVE PATH. Every other check here is a refusal, and a gate
+  --      that refuses everybody passes all of them while being broken. This is
+  --      the only one that proves the document comes back whole AND blanked.
+  if v_open is not null then
+    begin
+      v_doc := public.enter_garden(v_open);
+      if jsonb_array_length(v_doc->'plots') <> 12 then
+        v_out := v_out || ' **FAIL:enter_garden returned '
+              || jsonb_array_length(v_doc->'plots') || ' plots, not 12**';
+      elsif (v_doc->>'dewdrops')::int <> 0
+         or (v_doc->>'friendCode') is not null
+         or jsonb_array_length(v_doc->'unlockedSpecies') <> 0 then
+        v_out := v_out || ' **FAIL:enter_garden leaked the host private half**';
+      elsif (v_doc->>'hostUid') <> v_open::text then
+        v_out := v_out || ' **FAIL:enter_garden hostUid is not the host**';
+      elsif (v_doc->'viewer') is null then
+        v_out := v_out || ' **FAIL:enter_garden has no viewer block**';
+      else
+        v_out := v_out || ' enter-garden-real=ok';
+      end if;
+    exception when others then
+      v_out := v_out || ' **FAIL:enter_garden ' || SQLERRM || '**';
+    end;
+  end if;
+
   -- 3d. a garden that is NOT on the guest list must be refused. Proven by
   --     asking the predicate first, so this cannot pass by accident on a
   --     host who happens to be visitable.
   reset role;
-  if not public.visitable(v_a, v_b) then
+  if v_closed is not null then
     perform set_config('request.jwt.claims',
       json_build_object('sub', v_a, 'role', 'authenticated')::text, true);
     set local role authenticated;
     begin
-      perform public.enter_garden(v_b);
+      perform public.enter_garden(v_closed);
       v_out := v_out || ' **FAIL:entered a garden that is not visitable**';
     exception when others then v_out := v_out || ' closed-gate-refused=ok';
     end;
     reset role;
   else
-    v_out := v_out || ' closed-gate=SKIPPED(second garden is open)';
+    v_out := v_out || ' closed-gate=SKIPPED(every garden is open to this viewer)';
   end if;
 
   -- 3e. RLS: one player must never read another's notifications.
   reset role;
+  select id into v_b from profiles where id <> v_a order by id limit 1;
+  if v_b is null then
+    raise exception 'TESTRESULT SKIPPED — need a second profile for the RLS check';
+  end if;
   insert into notifications (user_id, kind, title, actor_name)
   values (v_b, 'visit', 'a private line for B', 'nobody');
   perform set_config('request.jwt.claims',

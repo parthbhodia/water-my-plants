@@ -209,12 +209,30 @@ begin
   -- so this walks into a REAL second garden and asserts the document came
   -- back whole AND blanked. `dewdrops` is the tell: if garden_view_json ever
   -- drifts back towards garden_state_json, the host's wallet shows up here.
-  declare v_other uuid; v_doc jsonb;
+  declare v_other uuid; v_viewer uuid := v_uid; v_doc jsonb;
   begin
     select id into v_other from profiles
      where id <> v_uid and public.visitable(v_uid, id) limit 1;
+
+    -- This test picks its user with an arbitrary `limit 1`, and on live data
+    -- that landed on the ONLY player with a garden — from whose seat nobody
+    -- else is visitable. Rather than skip the one check that exercises the
+    -- POSITIVE path, borrow a viewer for whom a host actually exists. An
+    -- arbitrary actor makes a test that reports the actor's luck instead of
+    -- the code's behaviour.
     if v_other is null then
-      v_out := v_out || 'enter_garden_real=SKIPPED(no other visitable garden) ';
+      select a.id, b.id into v_viewer, v_other
+      from profiles a join profiles b on b.id <> a.id
+      where public.visitable(a.id, b.id)
+      order by a.id, b.id limit 1;
+      if v_viewer is not null and v_viewer <> v_uid then
+        perform set_config('request.jwt.claims',
+          json_build_object('sub', v_viewer, 'role','authenticated')::text, true);
+      end if;
+    end if;
+
+    if v_other is null then
+      v_out := v_out || 'enter_garden_real=SKIPPED(nobody can visit anybody) ';
     else
       v_doc := public.enter_garden(v_other);
       if jsonb_array_length(v_doc->'plots') <> 12 then
@@ -236,7 +254,15 @@ begin
         v_out := v_out || 'enter_garden_real=ok ';
       end if;
     end if;
+    -- Put the impersonation back, or every check after this one silently runs
+    -- as the borrowed user.
+    if v_viewer is distinct from v_uid then
+      perform set_config('request.jwt.claims',
+        json_build_object('sub', v_uid, 'role','authenticated')::text, true);
+    end if;
   exception when others then
+    perform set_config('request.jwt.claims',
+      json_build_object('sub', v_uid, 'role','authenticated')::text, true);
     v_out := v_out || 'enter_garden_real=**FAIL:'||SQLERRM||'** '; procedure_failed := true; end;
 
   -- Breaking new ground. Funded first, because the interesting failure is
