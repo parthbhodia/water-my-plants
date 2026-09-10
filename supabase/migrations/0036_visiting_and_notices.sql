@@ -85,11 +85,19 @@ as $function$
        exists (select 1 from public.friendships f
                 where (f.user_id = p_viewer and f.friend_id = p_host)
                    or (f.user_id = p_host   and f.friend_id = p_viewer))
-       -- or a garden already shown in public: the landing page has been
-       -- displaying these to logged-OUT strangers since 0011, so letting a
-       -- signed-in player walk into one gives away nothing new
-       or exists (select 1 from public.plants p
-                   where p.user_id = p_host and p.active and p.died_on is null)
+       -- or a garden already shown in public. This is `get_showcase`'s OWN
+       -- predicate, verified against the live body rather than approximated:
+       -- the landing page has been showing these gardens to logged-OUT
+       -- strangers since 0011, so letting a signed-in player walk into one
+       -- gives away nothing new — and using the identical test is what makes
+       -- it impossible for the picker and the showcase to disagree.
+       --
+       -- It was briefly `exists (a living, undead plant)`, which is strictly
+       -- NARROWER: garden_value counts harvest points, so somebody who
+       -- bloomed their whole garden and gathered it is on the showcase with
+       -- nothing currently growing. That guess excluded exactly the players
+       -- who have finished something.
+       or public.garden_value(p_host) > 0
      )
 $function$;
 
@@ -445,18 +453,11 @@ begin
       coalesce(p.display_name, 'A gardener') as name,
       coalesce(p.avatar, '{"skin":0,"hair":0,"hat":0,"outfit":0}'::jsonb) as avatar,
       coalesce(gardener_level((select lifetime_earned from wallet w where w.user_id = p.id)), 1) as level,
-      -- Computed inline rather than through `garden_value()`. This is a
-      -- cosmetic number on a list row, and a plpgsql body does not parse
-      -- until it runs — so a wrong signature here would create cleanly and
-      -- then break the whole picker for every caller at the first call.
-      -- The same shape garden_state_json uses for `gardenScore`.
-      (select coalesce(sum(
-         case when pl.died_on is not null then -15
-         else round(s.points * greatest(0, 1 - 0.25 * overdue_days(pl, s,
-                local_today(safe_timezone(p.timezone))))) end
-       ), 0)::int
-         from plants pl join species s on s.id = pl.species_id
-        where pl.user_id = p.id and pl.active) as "gardenValue",
+      -- `garden_value(uuid)` again, now that the live `get_showcase` body has
+      -- confirmed the signature. It is the same number the showcase card
+      -- shows, which is the point: a garden offered here and the same garden
+      -- on the landing page must not report different worth.
+      coalesce(garden_value(p.id), 0) as "gardenValue",
       (select count(*)::int from plants pl join species s on s.id = pl.species_id
         where pl.user_id = p.id and pl.active and pl.died_on is null
           and not pl.is_bloomed
