@@ -61,15 +61,14 @@ grant select on table public.notifications to authenticated;
 --
 -- Deliberately NOT league rivals: the league is a ranking, not a social
 -- container, and being ranked beside somebody is not an introduction.
--- Every table here is SCHEMA-QUALIFIED, and that is not decoration.
---
--- This is `language sql`, whose body Postgres parses at CREATE time — the
--- opposite of plpgsql, which does not parse until it runs (the trap that let
--- a broken `admin_funnel()` report success and then raise 42702 for every
--- caller). The `set search_path` above applies at EXECUTION, not at parse, so
--- an unqualified `gardens` resolves against whatever search_path the session
--- running the migration happens to have — and fails the migration outright
--- with 42P01 when that is not `public`. Qualifying travels with the function.
+-- Every table here is SCHEMA-QUALIFIED. That is defensive rather than
+-- required: this is `language sql`, whose body Postgres parses at CREATE
+-- time (the opposite of plpgsql, which does not parse until it runs — the
+-- trap that let a broken `admin_funnel()` report success and then raise
+-- 42702 for every caller), and the `set search_path` above applies at
+-- EXECUTION, not at parse. So this function is the one place in the file
+-- where an unresolvable table fails the whole migration rather than one
+-- later call, and qualification travels with it where a GUC does not.
 create or replace function public.visitable(p_viewer uuid, p_host uuid)
 returns boolean
 language sql
