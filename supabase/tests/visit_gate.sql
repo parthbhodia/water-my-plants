@@ -15,6 +15,18 @@ do $$
 declare
   v_a uuid; v_b uuid; v_out text := ''; v_doc jsonb; v_n int;
 begin
+  -- Preconditions first, and the table one BEFORE any has_table_privilege
+  -- call: that function raises 42P01 on a relation that does not exist, so
+  -- running this against a database without 0036 died on a raw Postgres
+  -- error with no TESTRESULT line at all — which reads like the test is
+  -- broken rather than like the migration is missing.
+  if to_regclass('public.notifications') is null then
+    raise exception 'TESTRESULT SKIPPED — migration 0036 has not been applied yet';
+  end if;
+  if to_regprocedure('public.enter_garden(uuid)') is null then
+    raise exception 'TESTRESULT SKIPPED — 0036 table exists but enter_garden does not';
+  end if;
+
   select id into v_a from profiles limit 1;
   select id into v_b from profiles where id <> v_a limit 1;
   if v_a is null or v_b is null then

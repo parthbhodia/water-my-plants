@@ -61,6 +61,15 @@ grant select on table public.notifications to authenticated;
 --
 -- Deliberately NOT league rivals: the league is a ranking, not a social
 -- container, and being ranked beside somebody is not an introduction.
+-- Every table here is SCHEMA-QUALIFIED, and that is not decoration.
+--
+-- This is `language sql`, whose body Postgres parses at CREATE time — the
+-- opposite of plpgsql, which does not parse until it runs (the trap that let
+-- a broken `admin_funnel()` report success and then raise 42702 for every
+-- caller). The `set search_path` above applies at EXECUTION, not at parse, so
+-- an unqualified `gardens` resolves against whatever search_path the session
+-- running the migration happens to have — and fails the migration outright
+-- with 42P01 when that is not `public`. Qualifying travels with the function.
 create or replace function public.visitable(p_viewer uuid, p_host uuid)
 returns boolean
 language sql
@@ -71,16 +80,16 @@ as $function$
   select p_viewer is not null
      and p_host is not null
      and p_viewer <> p_host
-     and exists (select 1 from gardens g where g.user_id = p_host)
+     and exists (select 1 from public.gardens g where g.user_id = p_host)
      and (
        -- a neighbour, in either direction
-       exists (select 1 from friendships f
+       exists (select 1 from public.friendships f
                 where (f.user_id = p_viewer and f.friend_id = p_host)
                    or (f.user_id = p_host   and f.friend_id = p_viewer))
        -- or a garden already shown in public: the landing page has been
        -- displaying these to logged-OUT strangers since 0011, so letting a
        -- signed-in player walk into one gives away nothing new
-       or exists (select 1 from plants p
+       or exists (select 1 from public.plants p
                    where p.user_id = p_host and p.active and p.died_on is null)
      )
 $function$;
@@ -437,7 +446,18 @@ begin
       coalesce(p.display_name, 'A gardener') as name,
       coalesce(p.avatar, '{"skin":0,"hair":0,"hat":0,"outfit":0}'::jsonb) as avatar,
       coalesce(gardener_level((select lifetime_earned from wallet w where w.user_id = p.id)), 1) as level,
-      coalesce(garden_value(p.id), 0) as "gardenValue",
+      -- Computed inline rather than through `garden_value()`. This is a
+      -- cosmetic number on a list row, and a plpgsql body does not parse
+      -- until it runs — so a wrong signature here would create cleanly and
+      -- then break the whole picker for every caller at the first call.
+      -- The same shape garden_state_json uses for `gardenScore`.
+      (select coalesce(sum(
+         case when pl.died_on is not null then -15
+         else round(s.points * greatest(0, 1 - 0.25 * overdue_days(pl, s,
+                local_today(safe_timezone(p.timezone))))) end
+       ), 0)::int
+         from plants pl join species s on s.id = pl.species_id
+        where pl.user_id = p.id and pl.active) as "gardenValue",
       (select count(*)::int from plants pl join species s on s.id = pl.species_id
         where pl.user_id = p.id and pl.active and pl.died_on is null
           and not pl.is_bloomed
