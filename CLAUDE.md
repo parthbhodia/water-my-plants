@@ -753,6 +753,42 @@ and then raised 42702 for every caller. `admin_gate.sql` now asserts the
 series returns null and the chart renders an empty state that reads as
 "no data yet".
 
+## The HUD speaks the genre's language
+
+Borrowed on purpose from the phone games this sits beside (Clash, Subway
+Surfers), because they solved legibility at a glance and this did not:
+
+- **Icon plus number, and the number is the hero.** A coin and `450`, never
+  "Dewdrops: 450". Each resource owns a hue so it is *recognised* rather than
+  read — gold score, blue dewdrops, orange "needs care".
+- **Orange, not blue, for "needs care".** It used to share dewdrops' blue, so
+  the thing you must do and the thing you have looked like the same kind of
+  fact.
+- **Colour is rationed.** Only the three destinations are coloured (league
+  gold, almanac green, gardener violet); help/music/sound stay stone. The
+  reason those games read instantly is that *few* things are loud — colouring
+  all seven buttons would be noise wearing emphasis's clothes.
+- **Controls look pressable**: a 2px rim, a top-down gradient and a 3px rim
+  underneath that the `:active` state removes, so pressing has travel.
+
+**Every button says what it is at rest.** The meanings used to live in `title`
+attributes — which are HOVER tooltips, so on the primary target platform those
+were seven (three, on a phone) unlabelled grey circles, and the only way to
+learn what one did was to press it. One of them signed you out. They passed the
+44px audit the whole time: they were big enough to *hit* and not to *identify*,
+and no automated check catches that. A `title` may still carry an extra (which
+record is playing); it may never carry the button's meaning.
+
+**Sign-out asks twice.** One press arms it, the next means it, and it disarms
+after four seconds so it cannot sit armed waiting for a stray thumb.
+
+On a phone the toolbar wins the row and the name card takes what is left —
+capped the other way round, three buttons wrapped 2+1 and the labels ate a
+third of the sky.
+
+Not borrowed: the urgency. No countdowns, no badges inventing work, no "buy"
+anything. Legibility is what was worth taking.
+
 ## Panels: one job per tab
 
 The pull-up sheet had all seven panels stacked under **Garden** and nobody

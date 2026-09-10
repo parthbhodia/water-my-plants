@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Skull, Leaf, Trophy, Droplets, BookOpen, Palette, CircleHelp, Volume2, VolumeX, LogOut, Music, Music2,
@@ -7,6 +8,28 @@ import {
 } from "lucide-react";
 import type { GardenState } from "@/lib/types";
 
+/**
+ * The scoreboard and the toolbar, in the vocabulary phone games actually use.
+ *
+ * Both halves used to whisper. The stats were pale pills of tinted text; the
+ * toolbar was seven identical grey circles whose meaning lived in a `title`
+ * attribute — which is a HOVER tooltip, so on the primary target platform they
+ * were unlabelled buttons and the only way to learn what one did was to press
+ * it. One of them signed you out.
+ *
+ * So, borrowed from the genre and applied on purpose:
+ *
+ * - **Icon plus number, never a word.** A coin and `450`, not "Dewdrops: 450".
+ * - **Colour is the index, and it is rationed.** The three destinations get a
+ *   hue each (league gold, almanac green, gardener violet); the utilities stay
+ *   stone. Colouring all seven would be noise, not emphasis — the reason those
+ *   games read at a glance is that only a few things are loud.
+ * - **Every button says what it is, at rest.** Nothing informative in `title`.
+ * - **Controls look pressable**: 2px rim, a top-down gradient, a shadow under.
+ *
+ * What is deliberately NOT borrowed: the urgency. No countdowns, no red badges
+ * inventing work, no "buy" anything. Legibility is the thing worth taking.
+ */
 export default function Hud({
   state,
   muted,
@@ -50,53 +73,100 @@ export default function Hud({
     (p) => p.plant && p.plant.thirsty && !p.plant.isBloomed && !p.plant.dead
   ).length;
 
+  /**
+   * Sign-out asks twice.
+   *
+   * It sat in a row of same-looking buttons where the only label was a hover
+   * tooltip, so on a phone the cost of guessing wrong was your session. One
+   * press arms it, the next one means it, and it disarms itself after four
+   * seconds so it can never sit armed waiting for a stray thumb.
+   */
+  const [armed, setArmed] = useState(false);
+  const disarm = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (disarm.current) clearTimeout(disarm.current); }, []);
+  const pressOut = () => {
+    if (armed) {
+      if (disarm.current) clearTimeout(disarm.current);
+      onSignOut();
+      return;
+    }
+    setArmed(true);
+    if (disarm.current) clearTimeout(disarm.current);
+    disarm.current = setTimeout(() => setArmed(false), 4000);
+  };
+
   return (
     <div className="hud-top">
       <div className="hud-card">
         <div className="hud-day"><Leaf size={19} strokeWidth={2.4} aria-hidden /> {state.gardenName}</div>
         <div className="hud-stage">
           {state.displayName ?? "Gardener"} · {live}/{state.plotCount} plots growing
+        </div>
+        <div className="hud-statrow">
+          <button className="stat score tappable" onClick={onLeague}>
+            <Trophy size={19} strokeWidth={2.8} aria-hidden />
+            <b>{state.gardenScore}</b>
+          </button>
+          <span className={`stat dew${dewPulse ? " banked" : ""}`} key={`dew-${dewPulse ?? 0}`}>
+            <Droplets size={19} strokeWidth={2.8} aria-hidden />
+            <b>{state.dewdrops}</b>
+          </span>
+          {todo > 0 && (
+            <span className="stat todo">
+              <Droplets size={17} strokeWidth={2.8} aria-hidden />
+              <b>{todo}</b> need care
+            </span>
+          )}
           {lost > 0 && (
-            <span className="hud-lost">
-              <Skull size={16} strokeWidth={2.6} aria-hidden /> {lost} lost
+            <span className="stat lost" title={`${lost} lost plant${lost === 1 ? "" : "s"} cost ${lost * 15} points`}>
+              <Skull size={17} strokeWidth={2.8} aria-hidden />
+              <b>{lost}</b> lost
             </span>
           )}
         </div>
-        <div className="hud-statrow">
-          <button className="stat score tappable" onClick={onLeague}
-            title={lost > 0
-              ? `Garden score. ${lost} lost plant${lost === 1 ? "" : "s"} cost you ${lost * 15} points — clear or revive them to stop the drain.`
-              : "Garden score — view your league"}>
-            <Trophy size={18} strokeWidth={2.6} aria-hidden /> {state.gardenScore}
-          </button>
-          <span className={`stat dew${dewPulse ? " banked" : ""}`} key={`dew-${dewPulse ?? 0}`} title="Dewdrops"><Droplets size={18} strokeWidth={2.6} aria-hidden /> {state.dewdrops}</span>
-          {todo > 0 && <span className="stat todo">{todo} need care</span>}
-        </div>
       </div>
+
       <div className="hud-buttons">
-        <button className="hud-icon-btn hud-desk" onClick={onLeague} title="League"><Trophy size={19} strokeWidth={2.2} aria-hidden /></button>
-        <button className="hud-icon-btn hud-desk" onClick={onJournal} title="Almanac"><BookOpen size={19} strokeWidth={2.2} aria-hidden /></button>
-        <button className="hud-icon-btn hud-desk" onClick={onStudio} title="Profile & gardener"><Palette size={19} strokeWidth={2.2} aria-hidden /></button>
-        <button className="hud-icon-btn" onClick={onHelp} title="How to play"><CircleHelp size={19} strokeWidth={2.2} aria-hidden /></button>
-        <button
-          className="hud-icon-btn"
-          onClick={onToggleMusic}
-          title={musicOn ? `Playing "${musicName}" — press for the next record` : "Put a record on"}
-          style={musicOn ? undefined : { opacity: 0.55 }}
-        >
-          {musicOn ? <Music size={19} strokeWidth={2.2} aria-hidden /> : <Music2 size={19} strokeWidth={2.2} aria-hidden />}
+        <button className="hud-icon-btn b-league hud-desk" onClick={onLeague}>
+          <Trophy size={20} strokeWidth={2.6} aria-hidden /><i>League</i>
         </button>
-        <button className="hud-icon-btn" onClick={onToggleMute} title={muted ? "Unmute" : "Mute"}>
-          {muted ? <VolumeX size={19} strokeWidth={2.2} aria-hidden /> : <Volume2 size={19} strokeWidth={2.2} aria-hidden />}
+        <button className="hud-icon-btn b-almanac hud-desk" onClick={onJournal}>
+          <BookOpen size={20} strokeWidth={2.6} aria-hidden /><i>Almanac</i>
+        </button>
+        <button className="hud-icon-btn b-studio hud-desk" onClick={onStudio}>
+          <Palette size={20} strokeWidth={2.6} aria-hidden /><i>Gardener</i>
+        </button>
+        <button className="hud-icon-btn" onClick={onHelp}>
+          <CircleHelp size={20} strokeWidth={2.6} aria-hidden /><i>Help</i>
+        </button>
+        <button
+          className={`hud-icon-btn${musicOn ? "" : " off"}`}
+          onClick={onToggleMusic}
+          /* The record's NAME is extra, so it may live in a tooltip. What the
+             button does may not — that is the label underneath. */
+          title={musicOn ? `Playing "${musicName}" — press for the next record` : undefined}
+        >
+          {musicOn ? <Music size={20} strokeWidth={2.6} aria-hidden /> : <Music2 size={20} strokeWidth={2.6} aria-hidden />}
+          <i>{musicOn ? "Music" : "Silent"}</i>
+        </button>
+        <button className={`hud-icon-btn${muted ? " off" : ""}`} onClick={onToggleMute}>
+          {muted ? <VolumeX size={20} strokeWidth={2.6} aria-hidden /> : <Volume2 size={20} strokeWidth={2.6} aria-hidden />}
+          <i>{muted ? "Muted" : "Sound"}</i>
         </button>
         {isAdmin && (
-          /* hud-desk: nobody reads a funnel on a phone, and the mobile HUD has
-             no room for a sixth icon. */
-          <Link href="/admin/analytics" className="hud-icon-btn hud-desk" title="Analytics">
-            <ChartNoAxesColumn size={19} strokeWidth={2.2} aria-hidden />
+          /* hud-desk: nobody reads a funnel on a phone. */
+          <Link href="/admin/analytics" className="hud-icon-btn b-admin hud-desk">
+            <ChartNoAxesColumn size={20} strokeWidth={2.6} aria-hidden /><i>Funnel</i>
           </Link>
         )}
-        <button className="hud-icon-btn hud-desk" onClick={onSignOut} title="Sign out"><LogOut size={19} strokeWidth={2.2} aria-hidden /></button>
+        <button
+          className={`hud-icon-btn b-out hud-desk${armed ? " armed" : ""}`}
+          onClick={pressOut}
+          aria-live="polite"
+        >
+          <LogOut size={20} strokeWidth={2.6} aria-hidden />
+          <i>{armed ? "Sure?" : "Sign out"}</i>
+        </button>
       </div>
     </div>
   );
