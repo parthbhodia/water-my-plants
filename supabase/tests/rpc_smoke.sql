@@ -22,7 +22,8 @@ declare
   v_kind text; v_sp text; v_item text; v_gift text; v_r jsonb; v_fx text;
   v_reads text[] := array[
     'get_care_week','get_friends','get_hall_of_fame','get_league','get_shop',
-    'get_today_brief','get_variant_collection','get_weekly_gift'];
+    'get_today_brief','get_variant_collection','get_weekly_gift',
+    'get_notifications','get_visitable','mark_notifications_read'];
 
   procedure_failed boolean := false;
 begin
@@ -179,6 +180,51 @@ begin
   begin perform public.visit_water(v_uid);
     v_out := v_out || 'visit_water=**FAIL:let a player visit themselves** '; procedure_failed := true;
   exception when others then v_out := v_out || 'visit_water=guard(ok) '; end;
+
+  begin perform public.enter_garden(v_uid);
+    v_out := v_out || 'enter_garden=**FAIL:let a player visit their own garden** ';
+    procedure_failed := true;
+  exception when others then v_out := v_out || 'enter_garden=guard(ok) '; end;
+
+  begin perform public.rescue_plant(v_uid, 0::smallint);
+    v_out := v_out || 'rescue_plant=**FAIL:let a player rescue their own plant** ';
+    procedure_failed := true;
+  exception when others then v_out := v_out || 'rescue_plant=guard(ok) '; end;
+
+  -- The positive case, and the one that actually matters. A guard that
+  -- refuses everybody passes every negative check above and is still broken,
+  -- so this walks into a REAL second garden and asserts the document came
+  -- back whole AND blanked. `dewdrops` is the tell: if garden_view_json ever
+  -- drifts back towards garden_state_json, the host's wallet shows up here.
+  declare v_other uuid; v_doc jsonb;
+  begin
+    select id into v_other from profiles
+     where id <> v_uid and public.visitable(v_uid, id) limit 1;
+    if v_other is null then
+      v_out := v_out || 'enter_garden_real=SKIPPED(no other visitable garden) ';
+    else
+      v_doc := public.enter_garden(v_other);
+      if jsonb_array_length(v_doc->'plots') <> 12 then
+        v_out := v_out || '**FAIL:enter_garden returned '
+              || jsonb_array_length(v_doc->'plots') || ' plots, not 12** ';
+        procedure_failed := true;
+      elsif (v_doc->>'dewdrops')::int <> 0
+         or (v_doc->>'friendCode') is not null
+         or jsonb_array_length(v_doc->'unlockedSpecies') <> 0 then
+        v_out := v_out || '**FAIL:enter_garden leaked the host private half** ';
+        procedure_failed := true;
+      elsif (v_doc->>'hostUid') <> v_other::text then
+        v_out := v_out || '**FAIL:enter_garden hostUid is not the host** ';
+        procedure_failed := true;
+      elsif (v_doc->'viewer') is null then
+        v_out := v_out || '**FAIL:enter_garden has no viewer block** ';
+        procedure_failed := true;
+      else
+        v_out := v_out || 'enter_garden_real=ok ';
+      end if;
+    end if;
+  exception when others then
+    v_out := v_out || 'enter_garden_real=**FAIL:'||SQLERRM||'** '; procedure_failed := true; end;
 
   -- Breaking new ground. Funded first, because the interesting failure is
   -- the one where it runs and silently does nothing, not the one where a

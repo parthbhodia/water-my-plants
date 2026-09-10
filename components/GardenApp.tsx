@@ -7,9 +7,14 @@ import { GameBridge } from "@/game/bridge";
 import { RotateCw, X } from "lucide-react";
 import { sfx, music, MUSIC_MODES, type MusicMode } from "@/game/audio";
 import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
-import type { CompletedLily, GardenState, PlotState, TendAction, TendResult } from "@/lib/types";
+import type {
+  CompletedLily, GardenState, GardenView, Notice, NoticeState, PlotState,
+  TendAction, TendResult, VisitTarget,
+} from "@/lib/types";
+import { gardenVisited, gardenRescued } from "@/lib/analytics";
 import { welcomeMessage, welcomeMood, tendMessage, tendMood } from "@/lib/messages";
 import { canWaterNow } from "@/lib/species";
+import { nextStep } from "@/lib/nextstep";
 import { yearPhase, PHASE_NOTE, type YearPhase } from "@/lib/yearphase";
 import type { GuideMood } from "@/game/guide";
 import { GUIDE_NAME } from "@/game/guide";
@@ -37,6 +42,9 @@ import WeeklyGift from "./WeeklyGift";
 import Tutorial from "./Tutorial";
 import CoachMarks from "./CoachMarks";
 import HintRing from "./HintRing";
+import NoticePanel from "./NoticePanel";
+import VisitOverlay from "./VisitOverlay";
+import VisitPanel from "./VisitPanel";
 
 const GameCanvas = dynamic(() => import("./GameCanvas"), { ssr: false });
 
@@ -90,6 +98,28 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [dewPulse, setDewPulse] = useState(0);
   const acting = useRef(false);
   const actingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Somebody else's garden, while we are standing in it.
+   *
+   * Held completely apart from `state`, and it must stay that way — see the
+   * warning on `enterGarden` below.
+   */
+  const [visiting, setVisiting] = useState<GardenView | null>(null);
+  /**
+   * The same flag, readable from the scene callbacks.
+   *
+   * `onPlotTapped` is registered once and closes over `stateRef` — YOUR
+   * garden. Without this a tap on their plot 3 would consult your plot 3 and
+   * could water your plant, or open your "she is gone" dialog, from inside
+   * somebody else's yard. A ref rather than a dep so the subscription is not
+   * torn down and rebuilt every time a visit starts.
+   */
+  const visitingRef = useRef(false);
+  useEffect(() => { visitingRef.current = visiting !== null; }, [visiting]);
+  /** Which list this visit came from — reported to analytics, nothing else. */
+  const [visitSource, setVisitSource] = useState<VisitTarget["source"]>("friend");
+  const [notices, setNotices] = useState<NoticeState | null>(null);
+  const [noticesOpen, setNoticesOpen] = useState(false);
 
   /*
    * Granny speaks one line at a time, and she can be waved away.
@@ -319,15 +349,21 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
 
   // The gardener should not wander behind an open modal.
   useEffect(() => {
-    bridge.setFrozen(tutorial || seedFor !== null || journalOpen || goneFor !== null);
+    bridge.setFrozen(
+      tutorial || seedFor !== null || journalOpen || goneFor !== null || noticesOpen
+    );
     // goneFor belongs here too — without it the effect never re-runs when the
-    // gone modal opens, and the gardener walks about behind it.
-  }, [bridge, tutorial, seedFor, journalOpen, goneFor]);
+    // gone modal opens, and the gardener walks about behind it. Note visiting
+    // is deliberately NOT in this list: a guest must still be able to walk.
+  }, [bridge, tutorial, seedFor, journalOpen, goneFor, noticesOpen]);
 
   // ---- scene -> React ----
   useEffect(() => {
     bridge.onPlotTapped = (i) => {
       setSelected(i);
+      // In someone else's garden a tap only ever selects. Everything below
+      // this line acts on YOUR plots, which are not the ones on screen.
+      if (visitingRef.current) { sfx.click(); return; }
       const p = stateRef.current?.plots[i];
       // A dead plant answered a tap with silence, and on a wide screen the
       // card explaining it is below the fold — so the most confusing moment
@@ -631,6 +667,170 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     [supabase, bridge, showToast, avatar]
   );
 
+  // ---- visiting somebody else's garden ----
+
+  /**
+   * Walk into another player's garden.
+   *
+   * **A visit document must never go through `applyState`.** `applyState` is
+   * the single place that can notice your level going up, and it sets the
+   * `state` every panel in the app reads — so handing it somebody else's
+   * garden would congratulate you on THEIR level and repaint your shop, your
+   * wallet and your plot bar with their data. `CLAUDE.md` says every path
+   * landing new state must go through `applyState`; that rule is about YOUR
+   * state, and here the exact inverse holds. A visit reaches the scene and
+   * `visiting` and nothing else.
+   *
+   * `stateRef.current` still holds your own garden the whole time, which is
+   * what makes leaving a repaint rather than a reload.
+   */
+  const enterGarden = useCallback(
+    async (t: Pick<VisitTarget, "uid" | "name"> & { source?: VisitTarget["source"] }) => {
+      if (busy) return;
+      setBusy(true);
+      const { data, error } = await supabase.rpc("enter_garden", { p_host: t.uid });
+      setBusy(false);
+      if (error || !data) {
+        showToast(error?.message ?? "That gate is closed just now.", 4000, "worry");
+        return;
+      }
+      const view = data as GardenView;
+      setVisiting(view);
+      setSheetOpen(false);
+      bridge.setVisiting(true);
+      bridge.setGarden(view);
+      const firstNeedy = view.plots.findIndex((p) => p.unlocked && p.plant && p.plant.overdueDays > 0);
+      const pick = firstNeedy >= 0 ? firstNeedy : view.plots.findIndex((p) => p.unlocked && p.plant);
+      setSelected(pick >= 0 ? pick : 0);
+      bridge.select(pick >= 0 ? pick : 0);
+      const src = t.source ?? "friend";
+      setVisitSource(src);
+      gardenVisited(src);
+      sfx.click();
+      showToast(
+        `You let yourself in at ${t.name}'s gate. Have a wander, love.`,
+        5000, "happy"
+      );
+    },
+    [busy, supabase, bridge, showToast]
+  );
+
+  /** Back through the gate. Your own garden was never unloaded. */
+  const leaveGarden = useCallback(() => {
+    setVisiting(null);
+    bridge.setVisiting(false);
+    const mine = stateRef.current;
+    if (mine) {
+      bridge.setGarden(mine);
+      const pick = mine.plots.findIndex((p) => p.unlocked && p.plant);
+      setSelected(pick >= 0 ? pick : 0);
+      bridge.select(pick >= 0 ? pick : 0);
+    }
+    sfx.click();
+  }, [bridge]);
+
+  /**
+   * Lend a hand. A rescue stops decay and never grows anything — only the
+   * owner's own care can do that, which is the design note at the top of
+   * migration 0011 and the reason alt accounts cannot farm this.
+   *
+   * The returned document is the HOST's garden again, so it goes back into
+   * `visiting`, never into `applyState`. Your own dewdrops changed too, so
+   * the wallet is refreshed separately from `get_garden_state`.
+   */
+  const rescueHere = useCallback(
+    async (plotIdx: number) => {
+      const view = visiting;
+      if (!view || busy) return;
+      setBusy(true);
+      const { data, error } = await supabase.rpc("rescue_plant", {
+        p_host: view.hostUid,
+        p_plot_idx: plotIdx,
+      });
+      setBusy(false);
+      if (error || !data) {
+        showToast(error?.message ?? "That one is past helping.", 4000, "worry");
+        return;
+      }
+      const r = data as { status: string; reason?: string; dewEarned?: number; state?: GardenView };
+      if (r.state) {
+        setVisiting(r.state);
+        bridge.setGarden(r.state);
+      }
+      if (r.status !== "rescued") {
+        showToast(r.reason ?? "Nothing to do there.", 4000, "worry");
+        return;
+      }
+      sfx.grow();
+      gardenRescued(visitSource);
+      showToast(
+        `Saved. That one will hold until ${(view.displayName ?? "they").split(" ")[0]} gets back to it. +${r.dewEarned ?? 0} 💧`,
+        5200, "proud"
+      );
+      // Your wallet moved while you were out. Your OWN state does go through
+      // applyState — that is the rule this file lives by.
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const { data: mine } = await supabase.rpc("get_garden_state", { p_timezone: tz });
+      if (mine) applyState(mine as GardenState);
+    },
+    [visiting, busy, supabase, bridge, showToast, applyState, visitSource]
+  );
+
+  // ---- the bell ----
+
+  const loadNotices = useCallback(async () => {
+    const { data } = await supabase.rpc("get_notifications");
+    // Tolerates the RPC not existing yet: the client half of visiting ships
+    // ahead of its migration, and a missing function must cost a badge, not
+    // the HUD.
+    const s = data as NoticeState | null;
+    setNotices(s && Array.isArray(s.items) ? s : { unread: 0, items: [] });
+  }, [supabase]);
+
+  useEffect(() => { void loadNotices(); }, [loadNotices, briefKey]);
+
+  /**
+   * The bell, with your own garden's line folded in at the top.
+   *
+   * Social notices come from the server, because nothing else can know what
+   * somebody else did. What your OWN garden wants is derived right here from
+   * the state document already in hand, through the same `nextStep` ladder
+   * the panel above the plot chips reads — so the bell and the panel can
+   * never name different plants as the urgent one. It has no stored row, so
+   * it is never "unread"; it simply stops existing once the plant is watered.
+   */
+  const bell = useMemo<NoticeState | null>(() => {
+    if (!notices) return null;
+    const step = state ? nextStep(state) : null;
+    if (!step || step.kind === "empty" || step.kind === "harvest") return notices;
+    const derived: Notice = {
+      id: `care-${step.kind}-${step.idx}`,
+      kind: "care",
+      title: step.title,
+      body: step.body,
+      actorName: null,
+      actorAvatar: null,
+      actorUid: null,
+      plotIdx: step.idx,
+      createdAt: new Date().toISOString(),
+      read: true,
+    };
+    // Counted in the badge: a dying plant is exactly what a bell is for, and
+    // "unread" is the wrong word for it only in the database sense.
+    return { unread: notices.unread + 1, items: [derived, ...notices.items] };
+  }, [notices, state]);
+
+  const openNotices = useCallback(async () => {
+    sfx.click();
+    setNoticesOpen(true);
+    await loadNotices();
+    // Opening IS the read. Marking on close would lose the count for anybody
+    // who navigates away, and marking per-row would need a second gesture for
+    // something the player has already done with their eyes.
+    await supabase.rpc("mark_notifications_read");
+    setNotices((n) => (n ? { ...n, unread: 0, items: n.items.map((i) => ({ ...i, read: true })) } : n));
+  }, [supabase, loadNotices]);
+
   /**
    * Whether to offer the analytics link. RLS on `admins` is select-own-rows and
    * `anon` has no grant at all, so this returns a row only for a real admin and
@@ -707,6 +907,25 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     }, 320);
   }, []);
 
+  /**
+   * A notice about your own garden knows where it wants you to go.
+   *
+   * Defined here rather than beside the other bell handlers because it leans
+   * on `goToPlantCard` above — a notice that names a plot and then leaves you
+   * looking at the same screen is the "Go see" bug all over again.
+   */
+  const followNotice = useCallback((n: Notice) => {
+    setNoticesOpen(false);
+    if (n.kind === "care" && n.plotIdx !== null) {
+      setSelected(n.plotIdx);
+      bridge.select(n.plotIdx);
+      goToPlantCard();
+      return;
+    }
+    if (n.kind === "gift") { setTab("garden"); setSheetOpen(true); return; }
+    if (n.kind === "season") { setTab("league"); setSheetOpen(true); }
+  }, [bridge, goToPlantCard]);
+
   const needCare = state
     ? state.plots.filter(
         (p) => p.plant && p.plant.thirsty && !p.plant.isBloomed && !p.plant.dead
@@ -732,7 +951,10 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
       <div className="game-frame">
         <GameCanvas bridge={bridge} />
 
-        {state && (
+        {/* Your scoreboard is not the subject while you are a guest: "3/6 plots
+            growing" over somebody else's garden reads as a bug. The visit bar
+            takes the same corner and says whose garden this is instead. */}
+        {state && !visiting && (
           <Hud
             state={state}
             muted={muted}
@@ -745,6 +967,8 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
             musicOn={musicOn}
             musicName={MUSIC_MODES.find((m) => m.key === musicMode)?.name ?? ""}
             onSignOut={signOut}
+            onNotices={openNotices}
+            unread={bell?.unread ?? 0}
             dewPulse={dewPulse}
             isAdmin={isAdmin}
           />
@@ -758,7 +982,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
         )}
 
         {state && !tutorial && (
-          <div className="key-hints">W A S D / arrows to walk · E to water</div>
+          <div className="key-hints">
+            W A S D / arrows to walk{visiting ? "" : " · E to water"}
+          </div>
         )}
 
         {state && rotateHint && (
@@ -773,7 +999,17 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           </button>
         )}
 
-        {state && !tutorial && !coach && (
+        {visiting && (
+          <VisitOverlay
+            view={visiting}
+            selected={selected}
+            busy={busy}
+            onLeave={leaveGarden}
+            onRescue={rescueHere}
+          />
+        )}
+
+        {state && !tutorial && !coach && !visiting && (
           <WaterFab
             state={state}
             selected={selected}
@@ -793,6 +1029,18 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           onShop={() => setTab("shop")}
           onClose={() => setGoneFor(null)}
         />}
+
+        {noticesOpen && (
+          <NoticePanel
+            notices={bell}
+            onClose={() => setNoticesOpen(false)}
+            onGo={followNotice}
+            onVisitBack={(uid, name) => {
+              setNoticesOpen(false);
+              void enterGarden({ uid, name, source: "friend" });
+            }}
+          />
+        )}
 
         <MusicPicker
           open={musicOpen}
@@ -825,12 +1073,27 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
           >
             <span />
           </button>
-          <TabBar
-            active={tab}
-            onChange={(t) => { sfx.click(); setTab(t); }}
-            badge={{ garden: needCare }}
-          />
+          {/* The four tabs are all things you do to YOUR garden — plant,
+              spend, dress up, compete — and none of them mean anything from
+              inside somebody else's. So the sheet is replaced wholesale
+              rather than growing a fifth tab or greying out four. */}
+          {!visiting && (
+            <TabBar
+              active={tab}
+              onChange={(t) => { sfx.click(); setTab(t); }}
+              badge={{ garden: needCare }}
+            />
+          )}
           <div className="panel-body">
+            {visiting && (
+              <VisitPanel
+                view={visiting}
+                selected={selected}
+                busy={busy}
+                onSelect={(i) => { sfx.click(); setSelected(i); bridge.select(i); }}
+                onRescue={rescueHere}
+              />
+            )}
             {/*
               Garden is only what you act on right now: today's news, the one
               next thing to do, the plant you have selected, and your plots.
@@ -838,7 +1101,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
               live with the Shop — stacking all seven here meant nobody could
               tell which panel was the one that wanted them.
             */}
-            {tab === "garden" && (
+            {!visiting && tab === "garden" && (
               <>
                 <WeeklyGift refreshKey={briefKey} onState={applyState} showToast={showToast} />
                 <NextStep
@@ -874,7 +1137,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
                 />
               </>
             )}
-            {tab === "shop" && (
+            {!visiting && tab === "shop" && (
               <>
                 <ExpandPanel state={state} busy={busy} onBreakGround={breakGround} />
                 <ShopPanel
@@ -888,7 +1151,7 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
                 <RestorePanel state={state} onState={applyState} showToast={showToast} />
               </>
             )}
-            {tab === "profile" && (
+            {!visiting && tab === "profile" && (
               <>
                 <LevelBar state={state} />
                 <ReminderSettings />
@@ -902,7 +1165,9 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
                 />
               </>
             )}
-            {tab === "league" && <Leaderboard showToast={showToast} />}
+            {!visiting && tab === "league" && (
+              <Leaderboard showToast={showToast} onVisit={enterGarden} busy={busy} />
+            )}
           </div>
         </div>
       )}

@@ -2,7 +2,11 @@
 
 import { Sprout, Droplets, Flower2, CircleAlert, Sparkles, Skull } from "lucide-react";
 import type { GardenState } from "@/lib/types";
-import { SPECIES_BY_KEY, windowOpen } from "@/lib/species";
+import { nextStep, type StepKind } from "@/lib/nextstep";
+
+const ICON: Record<StepKind, typeof Sprout> = {
+  dead: Skull, dying: CircleAlert, thirsty: Droplets, empty: Sprout, harvest: Flower2,
+};
 
 /**
  * The single most useful next action, always visible above the plot chips.
@@ -16,69 +20,10 @@ export default function NextStep({
   /** Selects the plot and, for empty ones, opens the seed picker. */
   onGo: (plotIdx: number, plant: boolean) => void;
 }) {
-  const plots = state.plots.filter((p) => p.unlocked);
-
-  // Death comes first. A dead plant matched none of the branches below —
-  // it is not dying, not thirsty, not bloomed, and the plot is not empty
-  // because a corpse still occupies it — so a garden full of dead plants
-  // fell through to "Everything is tended".
-  const dead = plots.find((p) => p.plant?.dead);
-  const dying = plots.find(
-    (p) => p.plant && !p.plant.dead && !p.plant.isBloomed && p.plant.overdueDays >= 3
-  );
-  const thirsty = plots.find((p) => {
-    const sp = p.plant ? SPECIES_BY_KEY[p.plant.species] : null;
-    return (
-      p.plant && sp && p.plant.thirsty && !p.plant.isBloomed && !p.plant.dead &&
-      windowOpen(sp, state.hour)
-    );
-  });
-  const bloomed = plots.find((p) => p.plant?.isBloomed);
-  const empty = plots.find((p) => !p.plant);
-
-  let step: { icon: typeof Sprout; kind: string; title: string; body: string; cta: string; idx: number; plant: boolean } | null = null;
-
-  if (dead) {
-    const sp = SPECIES_BY_KEY[dead.plant!.species];
-    const tonics = state.inventory?.tonic ?? 0;
-    step = { icon: Skull, kind: "dead", idx: dead.idx, plant: false,
-      title: `Your ${sp?.name ?? "plant"} didn't make it`,
-      body: tonics > 0
-        ? `Plot ${dead.idx + 1} — you have a revival tonic. Use it, or clear the bed and start again.`
-        : `Plot ${dead.idx + 1} — a revival tonic from the Shop brings her back, or clear the bed and plant something new.`,
-      cta: "Go see" };
-  } else if (dying) {
-    const sp = SPECIES_BY_KEY[dying.plant!.species];
-    const pond = sp?.needsPlot === "water";
-    step = { icon: CircleAlert, kind: "dying", idx: dying.idx, plant: false,
-      title: pond
-        ? `Top up the pond — today or never`
-        : `Water the ${sp?.name} — today or never`,
-      body: pond
-        ? "One more day at this level and she strands on the mud."
-        : "One more dry day and she is gone for good.",
-      cta: "Save her" };
-  } else if (thirsty) {
-    const sp = SPECIES_BY_KEY[thirsty.plant!.species];
-    // She floats — she is not thirsty. The pond is low.
-    const pond = sp?.needsPlot === "water";
-    step = { icon: Droplets, kind: "thirsty", idx: thirsty.idx, plant: false,
-      title: pond ? `The pond needs topping up` : `Your ${sp?.name} is thirsty`,
-      body: pond
-        ? `Plot ${thirsty.idx + 1} — a can over the side holds the level for the day.`
-        : `Plot ${thirsty.idx + 1} — one drink is all it takes today.`,
-      cta: pond ? "Go top up" : "Go water" };
-  } else if (empty) {
-    const kindWord = empty.kind === "water" ? "the pond" : empty.kind === "shade" ? "a shaded plot" : "a sunny plot";
-    step = { icon: Sprout, kind: "empty", idx: empty.idx, plant: true,
-      title: "Plant something new",
-      body: `Plot ${empty.idx + 1} is ${kindWord} and empty — pick a seed that likes it there.`,
-      cta: "Choose a seed" };
-  } else if (bloomed) {
-    step = { icon: Flower2, kind: "harvest", idx: bloomed.idx, plant: false,
-      title: "A bloom is ready to harvest",
-      body: `Plot ${bloomed.idx + 1} — bank the points and free the plot.`, cta: "Go harvest" };
-  }
+  // The ladder itself lives in lib/nextstep.ts — the notification bell reads
+  // the same decision, and two copies of a priority order is how the panel
+  // and the bell end up naming different plants as the urgent one.
+  const step = nextStep(state);
 
   if (!step) {
     return (
@@ -92,7 +37,7 @@ export default function NextStep({
     );
   }
 
-  const Icon = step.icon;
+  const Icon = ICON[step.kind];
   return (
     <button className={`next-step k-${step.kind}`} onClick={() => onGo(step.idx, step.plant)}>
       <span className="ns-icon"><Icon size={20} strokeWidth={2.4} aria-hidden /></span>

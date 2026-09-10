@@ -183,6 +183,22 @@ export function tendVerb(s: SpeciesDef | null | undefined) {
     : { button: "Water", doing: "watering", due: "Thirsty right now." };
 }
 
+/**
+ * Can a visitor rescue this plant? The one source of truth, and deliberately
+ * NOT the same question as `canWaterNow`.
+ *
+ * A rescue stops decay — it buys the owner time and never grows anything —
+ * so it is only meaningful once a plant is actually behind: `overdueDays > 0`.
+ * A merely thirsty plant is on schedule and needs its owner, not a stranger;
+ * offering to "save" it would be theatre. There is no watering window here
+ * either, because a guest is not watering.
+ */
+export function needsRescue(
+  plant: { overdueDays: number; isBloomed: boolean; dead: boolean } | null | undefined
+): boolean {
+  return !!plant && !plant.dead && !plant.isBloomed && plant.overdueDays > 0;
+}
+
 /** Can this plant take a drink right now? The one source of truth. */
 export function canWaterNow(
   plant: { thirsty: boolean; isBloomed: boolean; dead: boolean; species: string } | null | undefined,

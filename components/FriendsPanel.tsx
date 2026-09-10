@@ -2,10 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import type { FriendsState } from "@/lib/types";
+import { DoorOpen } from "lucide-react";
+import type { FriendsState, VisitTarget } from "@/lib/types";
 import AvatarPreview from "./AvatarPreview";
 
-export default function FriendsPanel({ showToast }: { showToast: (m: string) => void }) {
+export default function FriendsPanel({
+  showToast,
+  onVisit,
+  busy: outerBusy = false,
+}: {
+  showToast: (m: string) => void;
+  /** Walk into their garden rather than helping blind from this list. */
+  onVisit?: (t: Pick<VisitTarget, "uid" | "name" | "source">) => void;
+  busy?: boolean;
+}) {
   const [data, setData] = useState<FriendsState | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -81,9 +91,9 @@ export default function FriendsPanel({ showToast }: { showToast: (m: string) => 
       </div>
 
       <p className="journal-sub">
-        Looking in on a neighbour <b>rescues</b> their neediest plant — it stops the rot and
-        buys them time, but only they can actually grow it. You both earn dewdrops. Once per
-        neighbour per day.
+        <b>Visit</b> walks you into their garden so you can see what needs saving before you
+        choose. A rescue stops the rot and buys them time, but only they can actually grow
+        it — you both earn dewdrops, once per neighbour per day.
       </p>
 
       {data.friends.length === 0 ? (
@@ -102,13 +112,25 @@ export default function FriendsPanel({ showToast }: { showToast: (m: string) => 
                   {f.needsHelp > 0 ? ` · ${f.needsHelp} struggling` : " · all well"}
                 </span>
               </div>
-              <button
-                className={`btn small ${f.needsHelp > 0 ? "blue" : "ghost"}`}
-                disabled={f.visitedToday || busy === f.id}
-                onClick={() => visit(f.id, f.name)}
-              >
-                {f.visitedToday ? "✓ Visited" : busy === f.id ? "…" : "💧 Visit"}
-              </button>
+              {onVisit ? (
+                <button
+                  className={`btn small ${f.needsHelp > 0 ? "blue" : "ghost"}`}
+                  disabled={outerBusy}
+                  onClick={() => onVisit({ uid: f.id, name: f.name, source: "friend" })}
+                >
+                  <DoorOpen size={15} strokeWidth={2.6} aria-hidden /> Visit
+                </button>
+              ) : (
+                /* Fallback for any mount without a scene behind it (the audit
+                   fixture): the old blind rescue, which still works. */
+                <button
+                  className={`btn small ${f.needsHelp > 0 ? "blue" : "ghost"}`}
+                  disabled={f.visitedToday || busy === f.id}
+                  onClick={() => visit(f.id, f.name)}
+                >
+                  {f.visitedToday ? "Helped today" : busy === f.id ? "…" : "Help out"}
+                </button>
+              )}
             </li>
           ))}
         </ul>

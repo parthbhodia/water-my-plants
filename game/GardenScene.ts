@@ -218,6 +218,14 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   private celebrating = false;
   /** Set while a modal (e.g. the tutorial) owns the screen. */
   private frozen = false;
+  /**
+   * The garden on screen belongs to somebody else.
+   *
+   * Distinct from `frozen` on purpose: frozen stops the gardener because a
+   * panel is covering the yard, while visiting leaves him walking and only
+   * removes the invitations to ACT on a garden that is not yours.
+   */
+  private visiting = false;
   private pipG!: Phaser.GameObjects.Graphics;
   private pouring = false;
   private nearPond = false;
@@ -346,7 +354,10 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       // The padlocked next bed counts as a target too. It has always been
       // drawn and never been touchable, so the one clear invitation in the
       // scene to make the garden bigger did nothing when you pressed it.
-      const nextIdx = this.garden?.plotCount ?? -1;
+      // Their next bed is their business: while visiting, the padlock is not
+      // drawn and must not be tappable either, or the tap routes the VISITOR
+      // to their own Shop to buy a plot in a garden they do not own.
+      const nextIdx = this.visiting ? -1 : this.garden?.plotCount ?? -1;
       PLOTS.forEach((pl, i) => {
         if (!this.plotUnlocked(i) && i !== nextIdx) return;
         const d = (p.worldX - pl.x) ** 2 + (p.worldY - (pl.y - 20)) ** 2;
@@ -508,6 +519,25 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     if (recenter) cam.centerOn(W / 2, 470);
   }
 
+  /**
+   * Show this garden as a guest: no invitations, no tending, but keep walking.
+   *
+   * Everything it changes is re-derived by the three refreshers below, so a
+   * state document that arrives afterwards cannot quietly put the padlock and
+   * the seed signs back.
+   */
+  setVisiting(v: boolean) {
+    if (this.visiting === v) return;
+    this.visiting = v;
+    // A pour or a walk-to-tend started in your own garden must not land in
+    // somebody else's.
+    this.autoTarget = null;
+    this.pendingPour = false;
+    if (!this.garden) return;
+    for (let i = 0; i < PLOTS.length; i++) this.refreshPlot(i);
+    this.refreshMarkers();
+  }
+
   /** Freezes walking and taps while React shows a full-screen panel. */
   setFrozen(v: boolean) {
     this.frozen = v;
@@ -525,6 +555,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
   /** Walk to a plot, then perform the action there. */
   requestTend(plotIdx: number, action: TendAction) {
     if (this.pouring || this.celebrating || this.frozen || this.ritualing || this.ritualWalking) return;
+    // Helping in someone else's garden goes through `rescue_plant`, which is a
+    // different act with a different contract — never the watering can.
+    if (this.visiting) return;
     if (!this.plotUnlocked(plotIdx)) return;
     this.selected = plotIdx;
     this.pendingAction = action;
@@ -1812,14 +1845,19 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
     const unlocked = this.plotUnlocked(i);
     // Beds only appear once a plot is yours; a single padlock teases the next one.
     node.bed?.setVisible(unlocked);
-    node.lock.setVisible(!unlocked && i === (this.garden?.plotCount ?? 0));
+    // A padlock is an offer to buy the next bed. Shown in a garden you are
+    // only visiting it is an offer to the wrong person, about somebody else's
+    // property — so it goes.
+    node.lock.setVisible(!this.visiting && !unlocked && i === (this.garden?.plotCount ?? 0));
 
     const plant = st?.plant ?? null;
+    // The trouble rings STAY while visiting. They are the reason a guest is
+    // here at all: a plant three days overdue is exactly what a rescue is for.
     const lastDay = !!plant && !plant.dead && !plant.isBloomed && plant.overdueDays >= 3;
     node.ring.setVisible(lastDay);
     node.alert.setVisible(lastDay);
-    // an unlocked, empty plot invites a seed
-    const inviting = unlocked && !plant;
+    // an unlocked, empty plot invites a seed — but only its owner can accept
+    const inviting = unlocked && !plant && !this.visiting;
     node.beacon.setVisible(inviting);
     node.seedSign.setVisible(inviting);
     if (!plant) {
@@ -2113,8 +2151,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       if (!g) return;
       g.clear();
       if (!this.plotUnlocked(i)) {
-        // only hint at the very next plot, so the yard stays uncluttered
-        if (i === (this.garden?.plotCount ?? 0)) {
+        // only hint at the very next plot, so the yard stays uncluttered —
+        // and not at all in a garden you are only a guest in
+        if (!this.visiting && i === (this.garden?.plotCount ?? 0)) {
           g.lineStyle(2, 0xffffff, 0.32);
           g.strokeEllipse(pl.x, pl.y + 2, 60, 23);
         }
@@ -2128,7 +2167,9 @@ export class GardenScene extends Phaser.Scene implements SceneApi {
       }
       const plant = st?.plant;
       if (!plant) {
-        // empty: dotted "plant here" ring
+        // empty: dotted "plant here" ring — an invitation only its owner can
+        // take up, so a guest sees bare earth and nothing asking them to fill it
+        if (this.visiting) return;
         g.lineStyle(2, 0xffffff, sel ? 0.7 : 0.4);
         g.strokeEllipse(pl.x, pl.y + 3, 52, 20);
       } else if (plant.dead) {

@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import type { HallOfFame, HofEntry, LeagueState } from "@/lib/types";
+import type { HallOfFame, HofEntry, LeagueState, VisitTarget } from "@/lib/types";
 import CareWeek from "./CareWeek";
 import AvatarPreview from "./AvatarPreview";
 import FriendsPanel from "./FriendsPanel";
+import VisitPicker from "./VisitPicker";
 
 const TIER_COLOR = ["#a97142", "#8d9aa4", "#c9a227", "#2c7d68", "#c9527a"];
 
@@ -18,18 +19,58 @@ const BOARDS: Array<{ key: keyof Omit<HallOfFame, "me">; title: string; unit: st
   { key: "levels", title: "⭐ Gardener level", unit: "", hint: "earned from every act of care" },
 ];
 
-function Row({ e, unit }: { e: HofEntry; unit: string }) {
-  return (
-    <li className={`board-row compact ${e.isMe ? "me" : ""}`}>
+/**
+ * One place on an all-time board.
+ *
+ * It becomes a BUTTON when the server has said this garden is one you may
+ * walk into — Clash lets you browse the top of the leaderboard, and a
+ * finished garden is the most persuasive thing this game owns. `uid` is
+ * absent for anybody not currently visitable (and for you), and a row that
+ * looks pressable and is not reads as broken, so the two cases are drawn
+ * differently rather than one being a dead button.
+ */
+function Row({
+  e,
+  unit,
+  onVisit,
+}: {
+  e: HofEntry;
+  unit: string;
+  onVisit?: (t: Pick<VisitTarget, "uid" | "name" | "source">) => void;
+}) {
+  const body = (
+    <>
       <span className="board-rank">{e.rank}</span>
       <span className="board-av"><AvatarPreview avatar={e.avatar} size={32} /></span>
       <span className="board-name">{e.name}{e.isMe && <em> · you</em>}</span>
       <span className="board-score">{e.value}{unit}</span>
+    </>
+  );
+  if (!e.uid || e.isMe || !onVisit) {
+    return <li className={`board-row compact ${e.isMe ? "me" : ""}`}>{body}</li>;
+  }
+  return (
+    <li className="board-row compact visitable">
+      <button
+        className="board-visit"
+        onClick={() => onVisit({ uid: e.uid!, name: e.name, source: "hof" })}
+        aria-label={`Visit ${e.name}'s garden`}
+      >
+        {body}
+      </button>
     </li>
   );
 }
 
-export default function Leaderboard({ showToast }: { showToast: (m: string) => void }) {
+export default function Leaderboard({
+  showToast,
+  onVisit,
+  busy = false,
+}: {
+  showToast: (m: string) => void;
+  onVisit?: (t: Pick<VisitTarget, "uid" | "name" | "source">) => void;
+  busy?: boolean;
+}) {
   const [tab, setTab] = useState<Tab>("week");
   const [league, setLeague] = useState<LeagueState | null>(null);
   const [hof, setHof] = useState<HallOfFame | null>(null);
@@ -129,7 +170,21 @@ export default function Leaderboard({ showToast }: { showToast: (m: string) => v
           </>
         )}
 
-        {tab === "friends" && <FriendsPanel showToast={showToast} />}
+        {tab === "friends" && (
+          <>
+            {/* The picker goes ABOVE the friend list on purpose: a code you
+                have to obtain before anything happens has produced zero
+                friendships in this game's lifetime, so it cannot be the first
+                thing a player meets on this tab. */}
+            {onVisit && (
+              <VisitPicker
+                busy={busy}
+                onVisit={(t) => onVisit({ uid: t.uid, name: t.name, source: t.source })}
+              />
+            )}
+            <FriendsPanel showToast={showToast} onVisit={onVisit} busy={busy} />
+          </>
+        )}
 
         {tab === "alltime" && (
           <>
@@ -175,7 +230,7 @@ export default function Leaderboard({ showToast }: { showToast: (m: string) => v
                       ) : (
                         <ol className="board-list">
                           {hof[b.key].map((e) => (
-                            <Row key={`${b.key}-${e.rank}`} e={e} unit={b.unit} />
+                            <Row key={`${b.key}-${e.rank}`} e={e} unit={b.unit} onVisit={onVisit} />
                           ))}
                         </ol>
                       )}

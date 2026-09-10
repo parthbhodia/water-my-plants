@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Skull, Leaf, Trophy, Droplets, BookOpen, Palette, CircleHelp, Volume2, VolumeX, LogOut, Music, Music2,
-  ChartNoAxesColumn,
+  ChartNoAxesColumn, Bell,
 } from "lucide-react";
 import type { GardenState } from "@/lib/types";
 
@@ -42,6 +42,8 @@ export default function Hud({
   musicOn,
   musicName,
   onSignOut,
+  onNotices,
+  unread = 0,
   dewPulse,
   isAdmin,
 }: {
@@ -56,6 +58,14 @@ export default function Hud({
   musicOn: boolean;
   musicName: string;
   onSignOut: () => void;
+  onNotices?: () => void;
+  /**
+   * How many unread. The bell is NOT `hud-desk`: a visit notification is the
+   * one piece of news that arrives while you are not looking, and phones are
+   * where nearly everybody plays — hiding it there would mean the person it
+   * is about never sees it.
+   */
+  unread?: number;
   /** Bumped when a reward lands, so the counter can flash. */
   dewPulse?: number;
   /**
@@ -136,6 +146,22 @@ export default function Hud({
         <button className="hud-icon-btn b-studio hud-desk" onClick={onStudio}>
           <Palette size={20} strokeWidth={2.6} aria-hidden /><i>Gardener</i>
         </button>
+        {onNotices && (
+          /* Stone, like the other utilities — the BADGE carries the colour, in
+             the same orange as "needs care", so the one loud thing on the
+             button is the part that is actually asking for you. Colouring the
+             whole button would spend the rationed hues on a sixth thing. */
+          <button className="hud-icon-btn b-news" onClick={onNotices}>
+            <span className="bell-wrap">
+              <Bell size={20} strokeWidth={2.6} aria-hidden />
+              {unread > 0 && (
+                <span className="bell-badge" aria-hidden>{unread > 9 ? "9+" : unread}</span>
+              )}
+            </span>
+            <i>News</i>
+            {unread > 0 && <span className="sr-only">{unread} unread</span>}
+          </button>
+        )}
         <button className="hud-icon-btn" onClick={onHelp}>
           <CircleHelp size={20} strokeWidth={2.6} aria-hidden /><i>Help</i>
         </button>

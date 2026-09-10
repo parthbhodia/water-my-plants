@@ -102,3 +102,21 @@ export function plantOpened(species: string) {
 export function seasonPicked(phase: string) {
   send("season_picked", { phase });
 }
+
+/**
+ * Somebody walked into another player's garden.
+ *
+ * `source` is the LIST they came from, and it is a closed set of four
+ * literals — never the host's name, id or friend code. Which route actually
+ * produces visits is the whole question: friend codes have produced zero in
+ * the game's lifetime, and this is how we find out whether the showcase and
+ * the Hall of Fame do any better.
+ */
+export function gardenVisited(source: "friend" | "showcase" | "hof" | "daily") {
+  send("garden_visited", { source });
+}
+
+/** And whether looking turned into helping. */
+export function gardenRescued(source: "friend" | "showcase" | "hof" | "daily") {
+  send("garden_rescued", { source });
+}

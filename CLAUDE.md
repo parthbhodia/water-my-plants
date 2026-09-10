@@ -865,6 +865,99 @@ consecutive "successes". Hence the rules:
   distinction true, so the table never claims to have told someone
   something it did not.
 
+## Visiting: a garden is a document, not a session
+
+The neighbour system shipped in 0011, was granted, was smoke tested — and
+`friendships` and `visits` both held **zero rows**. Nobody had ever used it,
+because the only door was a `LILY-XXXX` code you had to obtain out of band,
+and because "visiting" meant pressing a button in a list that picked a plant
+for you. You never saw the garden. `get_garden_of_the_day()` had been sitting
+in the database, granted and callable, wired to nothing at all.
+
+The Clash of Clans answer is that a base is a **serialisable document**, not a
+running session — two players are never in the same instance — and that the
+introduction is made by a container you already belong to, never by a code.
+So:
+
+- **`enter_garden(host)` returns a `GardenState`-shaped document** and the
+  scene paints it with `bridge.setGarden`. There is no second renderer,
+  because there is no second kind of thing to render.
+- **`garden_view_json` blanks the private half rather than omitting it** —
+  `dewdrops` 0, empty `inventory`, null `nextPlot`, null `friendCode`. Keeping
+  the shape is the whole trick; dropping keys would make every consumer
+  null-check a field that has always existed.
+- **It runs on the HOST's frozen timezone.** Thirst and `overdue_days` come
+  from `local_today(host_tz)`, so a visitor in Tokyo sees a Berlin garden's
+  day. Use the viewer's timezone and the screen and `rescue_plant` disagree
+  about which plants need saving.
+- **`visitable(viewer, host)` is the only guest list**, and `enter_garden`
+  re-checks it on every entry. `get_visitable` and the Hall of Fame rows only
+  ever *suggest*; a row is never authorisation. Deliberately not league
+  rivals — being ranked beside somebody is not an introduction.
+
+### The `applyState` inversion
+
+`applyState` is the single place that can notice your level going up, so every
+path landing **your** new state must go through it. A visit document must go
+through the **exact opposite** path: it reaches `bridge.setGarden` and the
+`visiting` state and nothing else. Push it through `applyState` and the game
+congratulates you on the host's level and repaints your shop, wallet and plot
+bar with their data. `stateRef.current` holds your own garden throughout,
+which is what makes leaving a repaint rather than a reload.
+
+The same trap catches the scene callbacks: `onPlotTapped` is registered once
+and closes over `stateRef` — **yours**. Without `visitingRef` a tap on their
+plot 3 consults your plot 3 and can water your plant from inside their yard.
+
+### `setVisiting` is not `setFrozen`
+
+Frozen stops the gardener because a panel covers the yard. Visiting leaves him
+**walking** — wandering their garden is the entire point — and removes only
+the things that invite you to act on a garden that is not yours: the padlock
+on their next bed, the seed-packet signs, the "plant here" rings, and
+`requestTend`. The **thirsty and dying rings stay**: those are what a guest
+came to see. Everything it changes is re-derived by `refreshPlot` and
+`refreshMarkers`, so a state document arriving later cannot put the padlock
+back.
+
+The pull-up sheet is replaced wholesale rather than growing a fifth tab: all
+four tabs are things you do to *your* garden, and greying out four dead
+controls is worse than showing none.
+
+### Rescue is not watering
+
+`needsRescue()` in `lib/species.ts` gates on `overdueDays > 0`, not on
+`thirsty`. A plant on schedule needs its owner; offering to save it would be
+theatre. A rescue **cancels decay and never grows anything** — the design note
+at the top of migration 0011 — and `rescued_on` stays separate from
+`last_care_on` so it never consumes the owner's own watering for the day.
+`visit_water` is untouched and still backs the blind quick-help button.
+
+### The bell
+
+`notifications` stores only what **other people** did, because nothing else
+can know it. What your own garden wants is derived on the client by
+`lib/nextstep.ts` — the same ladder the NextStep panel reads, so the bell and
+the panel can never name different plants as the urgent one. No cron, no
+backfill: a "your fern is dying" line stops existing when the fern is watered.
+`TodayBrief` was deleted for exactly this class of duplication; do not
+reintroduce it here.
+
+Every entry writes its own notification, with a **10-minute re-entry cooldown**
+per visitor per host — without it one player can bury somebody's bell by
+tapping Visit in a loop.
+
+The bell is **not** `hud-desk`. It is the one piece of news that arrives while
+you are not looking, and phones are where nearly everybody plays. The button
+stays stone and only the **badge** carries colour (the same orange as "needs
+care"), so the rationed hues are not spent on a sixth destination.
+
+`supabase/tests/visit_gate.sql` is the test that matters here, and the RPC
+smoke test cannot replace it — the smoke test runs as the owner, who passes
+every grant check, so a `garden_view_json` left callable by `authenticated`
+(handing any garden to anyone who knows a uuid, skipping `visitable`
+entirely) looks perfectly healthy there.
+
 ## Guiding a lost player
 
 A player should never wonder what to do next:

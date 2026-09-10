@@ -101,11 +101,24 @@ for (const d of DEVICES) {
     await audit(page, `${d.name}--tab-${tab}`, findings);
   }
   await page.evaluate(() => window.__tab("garden"));
-  for (const m of ["seed", "journal", "tutorial"]) {
+  for (const m of ["seed", "journal", "tutorial", "notices"]) {
     await page.evaluate((x) => window.__modal(x), m);
     await audit(page, `${d.name}--modal-${m}`, findings);
     await page.evaluate(() => window.__modal(null));
   }
+
+  // ---- standing in somebody else's garden ----
+  // The visit swaps the top-left chrome and the whole sheet, so both halves
+  // need walking: an overlay bar and a stage FAB that only appear in this
+  // mode would otherwise never be measured at all.
+  await page.evaluate(() => window.__visit(true));
+  await page.waitForTimeout(400);
+  await audit(page, `${d.name}--visiting`, findings);
+  await page.evaluate(() => window.__sheet(true));
+  await page.waitForTimeout(400);
+  await audit(page, `${d.name}--visiting-sheet`, findings);
+  await page.evaluate(() => window.__visit(false));
+  await page.evaluate(() => window.__sheet(false));
   // ---- can a thumb actually tap a plant? ----
   await page.goto(`${BASE}/dev-mobile`, { waitUntil: "networkidle" });
   await page.waitForSelector("canvas");

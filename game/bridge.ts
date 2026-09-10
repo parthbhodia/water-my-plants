@@ -24,6 +24,7 @@ export interface SceneApi {
   setReducedMotion(v: boolean): void;
   setCombo(n: number): void;
   releaseFocus(): void;
+  setVisiting(v: boolean): void;
 }
 
 export class GameBridge {
@@ -33,6 +34,7 @@ export class GameBridge {
   private frozen = false;
   private inset = 0;
   private reduced = false;
+  private visiting = false;
 
   /** React sets these */
   onPourStart: ((plotIdx: number, action: TendAction) => void) | null = null;
@@ -51,6 +53,7 @@ export class GameBridge {
     if (this.frozen) api.setFrozen(true);
     if (this.inset) api.setBottomInset(this.inset);
     if (this.reduced) api.setReducedMotion(true);
+    if (this.visiting) api.setVisiting(true);
   }
 
   detach() {
@@ -135,6 +138,22 @@ export class GameBridge {
   setReducedMotion(v: boolean) {
     this.reduced = v;
     this.sceneApi?.setReducedMotion(v);
+  }
+
+  /**
+   * This garden belongs to somebody else.
+   *
+   * NOT the same thing as frozen. Frozen stops the gardener entirely, because
+   * a modal is covering the yard; visiting leaves him free to WALK — wandering
+   * a neighbour's garden is the whole point of being there — and only takes
+   * away the things that invite you to act on it: the padlock on their next
+   * bed, the seed-packet signs over their empty plots, the "plant here" rings,
+   * and tending. The thirsty and dying rings deliberately stay: those are what
+   * you came to see.
+   */
+  setVisiting(v: boolean) {
+    this.visiting = v;
+    this.sceneApi?.setVisiting(v);
   }
 
   /** Stops the gardener responding to keys/taps while a modal is open. */
