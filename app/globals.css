@@ -618,6 +618,20 @@ button { font-family: var(--font); cursor: pointer; }
   text-align: center;
   box-shadow: var(--shadow-lg);
 }
+/* The heading now carries a lucide icon rather than an emoji, so it needs to
+   be a flex row instead of relying on the glyph sitting in the text line. */
+.error-box h2 {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  margin: 0 0 10px;
+}
+/* Reachable for whoever is debugging, not the sentence a player reads. */
+.error-detail {
+  margin: 10px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .74rem; line-height: 1.45;
+  color: var(--ink-soft); opacity: .75;
+  word-break: break-word;
+}
 
 @media (max-width: 640px) {
   .hud-card { padding: 7px 11px; }

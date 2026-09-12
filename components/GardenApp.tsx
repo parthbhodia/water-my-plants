@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 import { GameBridge } from "@/game/bridge";
-import { RotateCw, X } from "lucide-react";
+import { RotateCw, X, CloudOff, Flower2 } from "lucide-react";
 import { sfx, music, MUSIC_MODES, type MusicMode } from "@/game/audio";
 import { type Avatar, DEFAULT_AVATAR, safeAvatar } from "@/game/avatar";
 import type {
@@ -120,6 +120,27 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
   const [visitSource, setVisitSource] = useState<VisitTarget["source"]>("friend");
   const [notices, setNotices] = useState<NoticeState | null>(null);
   const [noticesOpen, setNoticesOpen] = useState(false);
+
+  /**
+   * A dropped connection is not a broken garden, and must not be reported as
+   * one. `supabase-js` hands back a failed fetch as an error whose message is
+   * the stringified TypeError — "TypeError: Load failed" on Safari, "Failed to
+   * fetch" on Chrome — and this screen printed that at the player verbatim.
+   * A phone on a train says the gate is stuck and names a JavaScript type.
+   */
+  const offline = error !== null && /load failed|failed to fetch|networkerror|network request failed/i.test(error);
+
+  /**
+   * Come back by itself when the signal does. On the primary platform the
+   * usual cause is a tunnel or a lift, and the player should not have to
+   * discover a button to recover from ten seconds of no bars.
+   */
+  useEffect(() => {
+    if (!offline) return;
+    const back = () => window.location.reload();
+    window.addEventListener("online", back);
+    return () => window.removeEventListener("online", back);
+  }, [offline]);
 
   /*
    * Granny speaks one line at a time, and she can be waved away.
@@ -936,8 +957,28 @@ export default function GardenApp({ userEmail }: { userEmail: string }) {
     return (
       <main className="garden-wrap">
         <div className="error-box">
-          <h2>🥀 Oh dear</h2>
-          <p>The garden gate is stuck: {error}</p>
+          {/* lucide, not an emoji — the whole-app icon rule, and this screen
+              had the last emoji standing in for one. */}
+          <h2>
+            {offline
+              ? <CloudOff size={26} strokeWidth={2.4} aria-hidden />
+              : <Flower2 size={26} strokeWidth={2.4} aria-hidden />}
+            {offline ? "No signal" : "Oh dear"}
+          </h2>
+          {offline ? (
+            <p>
+              Your garden is safe and waiting — it is the connection that went.
+              Nothing was lost. It will open by itself when you are back on.
+            </p>
+          ) : (
+            <>
+              <p>The garden gate is stuck. Granny is looking into it.</p>
+              {/* The technical detail stays reachable, because the one person
+                  who needs it is whoever is debugging — but it is no longer
+                  the headline a player reads. */}
+              <p className="error-detail">{error}</p>
+            </>
+          )}
           <button className="btn" onClick={() => window.location.reload()}>Try again</button>
         </div>
       </main>
