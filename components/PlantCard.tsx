@@ -228,6 +228,29 @@ export default function PlantCard({
 
       <p className={`pcl-status s-${tone}`}>{statusLine}</p>
 
+      {/*
+        A pond plant has to justify itself AT REST.
+
+        The verb was fixed long ago — the button says Top up, the toasts say
+        "level held" — but the REASON lived behind the details chevron, and a
+        player looking at a lily sitting in water does not tap a chevron to
+        find out why they are holding a watering can. They conclude the game
+        is silly, which is exactly what happened. Same principle as the
+        overwater warning: the explanation has to arrive BEFORE the action,
+        not be available on request afterwards.
+
+        One sentence only. The full `why` stays in the expander below.
+      */}
+      {pond && !plant.isBloomed && !plant.dead && (
+        <p className="pcl-pond" role="note">
+          <Waves size={15} strokeWidth={2.5} aria-hidden />
+          <span>
+            <b>She floats — it is the pond that drops.</b> An inch a week to
+            the sun, and her stem is cut to one depth.
+          </span>
+        </p>
+      )}
+
       {wouldHarm && (
         <p className="pcl-warn" role="status">
           <TriangleAlert size={16} strokeWidth={2.5} aria-hidden />

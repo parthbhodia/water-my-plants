@@ -3166,3 +3166,19 @@ button { font-family: var(--font); cursor: pointer; }
   .visit-leave, .visit-need .btn, .board-row.visitable .board-visit { min-height: 44px; }
   .notice-row .btn { min-height: 44px; }
 }
+
+/* A pond plant explains itself at rest. The verb was honest long before the
+   REASON was visible — that lived behind the details chevron, and nobody
+   taps a chevron to find out why they are watering something already in
+   water. Quiet pond-blue, not a warning: this is context, not a problem. */
+.pcl-pond {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 8px 0 0; padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(63,155,196,.28);
+  border-left: 3px solid var(--pond-deep);
+  background: linear-gradient(180deg, rgba(232,246,252,.9), rgba(214,238,248,.75));
+  font-size: .82rem; line-height: 1.45; color: var(--ink);
+}
+.pcl-pond svg { flex: none; margin-top: 1px; color: var(--pond-deep); }
+.pcl-pond b { font-weight: 800; }
